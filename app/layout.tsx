@@ -1,9 +1,29 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Fraunces, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
+const sans = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const display = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+  axes: ["opsz"],
+});
+
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "Radler Cup",
-  description: "Radler Cup tournament companion — live scores and pairings",
+  title: "Radler Cup · Schloss Ernegg",
+  description: "Live scores, pairings, and match play for the Radler Cup.",
 };
 
 export const viewport: Viewport = {
@@ -11,7 +31,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#1E5631",
+  themeColor: "#0A0E0C",
 };
 
 export default function RootLayout({
@@ -20,8 +40,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html
+      lang="en"
+      className={`${sans.variable} ${display.variable} ${mono.variable}`}
+    >
+      <body className="font-sans">{children}</body>
     </html>
   );
 }
