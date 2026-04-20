@@ -4,6 +4,22 @@ import { getSession } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
+type Tile = {
+  label: string;
+  desc: string;
+  count: string;
+  href?: string;
+};
+
+const TILES: Tile[] = [
+  { label: "Players", desc: "Names · handicaps · teams", count: "24", href: "/admin/players" },
+  { label: "Teams", desc: "Names · colours · captains", count: "2" },
+  { label: "Course", desc: "Par · stroke index · yardages", count: "18" },
+  { label: "Sessions", desc: "Format · times · allowances", count: "5" },
+  { label: "Rules", desc: "Allowance · points · tiebreaker", count: "—" },
+  { label: "Passwords", desc: "Player · captain · admin", count: "4" },
+];
+
 export default async function AdminPage() {
   const session = await getSession();
 
@@ -18,8 +34,9 @@ export default async function AdminPage() {
           <div className="text-eyebrow uppercase text-tbc">Restricted</div>
           <h1 className="font-display text-3xl text-ink-100">Admin only</h1>
           <p className="text-sm text-ink-400">
-            You&apos;re signed in as <span className="text-ink-200">{session.role}</span>,
-            but this area requires the admin password.
+            You&apos;re signed in as{" "}
+            <span className="text-ink-200">{session.role}</span>, but this area
+            requires the admin password.
           </p>
           <Link
             href="/"
@@ -61,32 +78,45 @@ export default async function AdminPage() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-ink-800 border border-ink-800 rounded-sm overflow-hidden mt-16">
-          {[
-            { label: "Players", desc: "24 players · handicaps · teams", count: "24" },
-            { label: "Teams", desc: "Names · colours · captains", count: "2" },
-            { label: "Course", desc: "Par · stroke index · yardages", count: "18" },
-            { label: "Sessions", desc: "Format · times · allowances", count: "5" },
-            { label: "Rules", desc: "Handicap allowance · points · tiebreaker", count: "—" },
-            { label: "Passwords", desc: "Player · captain · admin", count: "4" },
-          ].map((tile) => (
-            <div
-              key={tile.label}
-              className="bg-ink-950 p-8 hover:bg-ink-900 transition-colors cursor-not-allowed opacity-60"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="text-eyebrow uppercase text-schloss-bright">
-                  {tile.label}
+          {TILES.map((tile) => {
+            const content = (
+              <>
+                <div className="flex items-start justify-between mb-4">
+                  <div className="text-eyebrow uppercase text-schloss-bright">
+                    {tile.label}
+                  </div>
+                  <div className="font-mono tabular text-xs text-ink-500">
+                    {tile.count}
+                  </div>
                 </div>
-                <div className="font-mono tabular text-xs text-ink-500">
-                  {tile.count}
+                <div className="text-ink-300 text-sm">{tile.desc}</div>
+                <div
+                  className={`mt-6 text-eyebrow uppercase ${
+                    tile.href ? "text-schloss-bright" : "text-ink-600"
+                  }`}
+                >
+                  {tile.href ? "Edit →" : "Coming soon"}
                 </div>
+              </>
+            );
+
+            return tile.href ? (
+              <Link
+                key={tile.label}
+                href={tile.href}
+                className="bg-ink-950 p-8 hover:bg-ink-900 transition-colors block"
+              >
+                {content}
+              </Link>
+            ) : (
+              <div
+                key={tile.label}
+                className="bg-ink-950 p-8 opacity-60 cursor-not-allowed"
+              >
+                {content}
               </div>
-              <div className="text-ink-300 text-sm">{tile.desc}</div>
-              <div className="mt-6 text-eyebrow uppercase text-ink-600">
-                Coming soon
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </main>
