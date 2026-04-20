@@ -11,15 +11,16 @@ import {
 
 export type Role = "player" | "captain" | "admin" | null;
 
+type LoginSuccess = { ok: true; role: Exclude<Role, null>; scope: string | null };
+type LoginFailure = { ok: false; error: string };
+export type LoginResult = LoginSuccess | LoginFailure;
+
 type AuthState = {
   role: Role;
   scope: string | null;
   loading: boolean;
   refresh: () => Promise<void>;
-  login: (password: string) => Promise
-    | { ok: true; role: Exclude<Role, null>; scope: string | null }
-    | { ok: false; error: string }
-  >;
+  login: (password: string) => Promise<LoginResult>;
   logout: () => Promise<void>;
 };
 
@@ -48,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
-  const login = useCallback<AuthState["login"]>(async (password) => {
+  const login = useCallback(async (password: string): Promise<LoginResult> => {
     try {
       const res = await fetch("/api/auth/verify", {
         method: "POST",
