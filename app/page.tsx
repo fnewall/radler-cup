@@ -1,6 +1,7 @@
 import { Countdown } from "@/components/Countdown";
 import { TeamCrest } from "@/components/TeamCrest";
 import { getLandingData } from "@/lib/queries/landing";
+import { GearButton } from "@/components/GearButton";
 
 // Revalidate this page every 60s so edits via admin show up quickly
 // without a rebuild, but we still get static-ish performance.
@@ -71,15 +72,7 @@ export default async function Home() {
             {tournament.name} · MMXXVI
           </span>
         </div>
-        <button
-          aria-label="Settings"
-          className="w-9 h-9 rounded-full border border-ink-700 hover:border-ink-500 transition-colors flex items-center justify-center text-ink-300 hover:text-ink-100"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-        </button>
+        <GearButton />
       </header>
 
       {/* Hero */}
