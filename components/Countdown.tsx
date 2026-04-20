@@ -16,14 +16,30 @@ function diff(target: Date) {
   return { days, hours, minutes, seconds };
 }
 
+// Render nothing on server — compute the time only after mount.
+// Prevents hydration mismatch from server/client clock drift.
 export function Countdown({ target }: CountdownProps) {
-  const targetDate = new Date(target);
-  const [time, setTime] = useState(() => diff(targetDate));
+  const [time, setTime] = useState<ReturnType<typeof diff>>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    const targetDate = new Date(target);
+    setTime(diff(targetDate));
+    setMounted(true);
     const id = setInterval(() => setTime(diff(targetDate)), 1000);
     return () => clearInterval(id);
   }, [target]);
+
+  // Placeholder with reserved space — same height whether loading or live
+  if (!mounted) {
+    return (
+      <div className="flex items-start gap-6 md:gap-10 opacity-0" aria-hidden>
+        <div className="tabular font-mono text-4xl md:text-6xl font-light leading-none">
+          00
+        </div>
+      </div>
+    );
+  }
 
   if (!time) {
     return (
