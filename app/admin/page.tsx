@@ -15,7 +15,7 @@ const TILES: Tile[] = [
   { label: "Players", desc: "Names · handicaps · teams", count: "24", href: "/admin/players" },
   { label: "Teams", desc: "Names · colours · captains", count: "2" },
   { label: "Course", desc: "Par · stroke index · yardages", count: "18" },
-  { label: "Sessions", desc: "Format · times · allowances", count: "5" },
+  { label: "Sessions", desc: "Dates · times · formats", count: "5", href: "/admin/sessions" },
   { label: "Rules", desc: "Allowance · points · tiebreaker", count: "—" },
   { label: "Passwords", desc: "Player · captain · admin", count: "4" },
 ];
