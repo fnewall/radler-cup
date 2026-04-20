@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 
@@ -8,9 +9,15 @@ export function GearButton() {
   const { role, login, logout } = useAuth();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Portal target only exists after mount (document undefined on server)
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -57,6 +64,97 @@ export function GearButton() {
     router.refresh();
   }
 
+  const modal = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      {/* Solid black backdrop */}
+      <div
+        className="absolute inset-0 bg-black/95"
+        onClick={close}
+      />
+
+      {/* Modal panel — fully opaque, above the backdrop */}
+      <div
+        className="relative w-full max-w-sm rounded-lg overflow-hidden shadow-2xl border border-ink-700"
+        style={{ backgroundColor: "#0F1512" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-schloss-bright to-transparent" />
+
+        <div className="p-8" style={{ backgroundColor: "#0F1512" }}>
+          <div className="text-eyebrow uppercase text-schloss-bright mb-2">
+            {role ? "Signed In" : "Access"}
+          </div>
+          <h2 className="font-display text-2xl text-ink-100 mb-6">
+            {role
+              ? role === "admin"
+                ? "Admin"
+                : role === "captain"
+                  ? "Captain"
+                  : "Player"
+              : "Enter password"}
+          </h2>
+
+          {role ? (
+            <div className="space-y-6">
+              <p className="text-sm text-ink-300">
+                You are signed in as{" "}
+                <span className="text-ink-100 font-medium">{role}</span>.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={close}
+                  className="flex-1 h-11 rounded-md border border-ink-700 text-ink-200 hover:border-ink-500 hover:text-ink-100 transition-colors text-sm"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="flex-1 h-11 rounded-md bg-ink-800 text-ink-200 hover:bg-ink-700 transition-colors text-sm"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <input
+                type="password"
+                autoFocus
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password or PIN"
+                className="w-full h-12 px-4 bg-ink-950 border border-ink-700 rounded-md text-ink-100 placeholder-ink-500 focus:border-schloss-bright focus:outline-none transition-colors"
+                autoComplete="current-password"
+              />
+              {error && (
+                <div className="text-sm text-tbc">{error}</div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={close}
+                  className="flex-1 h-11 rounded-md border border-ink-700 text-ink-200 hover:border-ink-500 transition-colors text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || !password.trim()}
+                  className="flex-1 h-11 rounded-md bg-schloss text-white hover:bg-schloss-bright transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? "Checking..." : "Enter"}
+                </button>
+              </div>
+              <p className="text-xs text-ink-500 pt-2 leading-relaxed">
+                Players, captains, and admin use the same prompt — we&apos;ll recognise which password you entered.
+              </p>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <button
@@ -74,97 +172,7 @@ export function GearButton() {
         </svg>
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
-          {/* Heavy backdrop — almost fully black */}
-          <div
-            className="absolute inset-0 bg-black/95"
-            onClick={close}
-          />
-
-          {/* Modal panel — fully opaque */}
-          <div
-            className="relative w-full max-w-sm rounded-lg overflow-hidden shadow-2xl"
-            style={{ backgroundColor: "#0F1512" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Accent bar at top */}
-            <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-schloss-bright to-transparent" />
-
-            <div className="p-8" style={{ backgroundColor: "#0F1512" }}>
-              <div className="text-eyebrow uppercase text-schloss-bright mb-2">
-                {role ? "Signed In" : "Access"}
-              </div>
-              <h2 className="font-display text-2xl text-ink-100 mb-6">
-                {role
-                  ? role === "admin"
-                    ? "Admin"
-                    : role === "captain"
-                      ? "Captain"
-                      : "Player"
-                  : "Enter password"}
-              </h2>
-
-              {role ? (
-                <div className="space-y-6">
-                  <p className="text-sm text-ink-300">
-                    You are signed in as{" "}
-                    <span className="text-ink-100 font-medium">{role}</span>.
-                  </p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={close}
-                      className="flex-1 h-11 rounded-md border border-ink-700 text-ink-200 hover:border-ink-500 hover:text-ink-100 transition-colors text-sm"
-                    >
-                      Close
-                    </button>
-                    <button
-                      onClick={handleLogout}
-                      className="flex-1 h-11 rounded-md bg-ink-800 text-ink-200 hover:bg-ink-700 transition-colors text-sm"
-                    >
-                      Sign out
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <input
-                    type="password"
-                    autoFocus
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Password or PIN"
-                    className="w-full h-12 px-4 bg-ink-950 border border-ink-700 rounded-md text-ink-100 placeholder-ink-500 focus:border-schloss-bright focus:outline-none transition-colors"
-                    autoComplete="current-password"
-                  />
-                  {error && (
-                    <div className="text-sm text-tbc">{error}</div>
-                  )}
-                  <div className="flex gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={close}
-                      className="flex-1 h-11 rounded-md border border-ink-700 text-ink-200 hover:border-ink-500 transition-colors text-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={submitting || !password.trim()}
-                      className="flex-1 h-11 rounded-md bg-schloss text-white hover:bg-schloss-bright transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {submitting ? "Checking..." : "Enter"}
-                    </button>
-                  </div>
-                  <p className="text-xs text-ink-500 pt-2 leading-relaxed">
-                    Players, captains, and admin use the same prompt — we&apos;ll recognise which password you entered.
-                  </p>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {open && mounted && createPortal(modal, document.body)}
     </>
   );
 }
