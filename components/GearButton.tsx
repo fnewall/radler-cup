@@ -2,19 +2,19 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 
 export function GearButton() {
   const { role, login, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Portal target only exists after mount (document undefined on server)
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -64,15 +64,26 @@ export function GearButton() {
     router.refresh();
   }
 
+  function goToArea() {
+    close();
+    if (role === "admin") router.push("/admin");
+    else if (role === "captain") router.push("/captain");
+  }
+
+  const destinationLabel =
+    role === "admin" ? "Go to admin" : role === "captain" ? "Go to captain" : null;
+
+  // Hide destination button when already on the destination page
+  const alreadyThere =
+    (role === "admin" && pathname?.startsWith("/admin")) ||
+    (role === "captain" && pathname?.startsWith("/captain"));
+
+  const showDestination = role && destinationLabel && !alreadyThere;
+
   const modal = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      {/* Solid black backdrop */}
-      <div
-        className="absolute inset-0 bg-black/95"
-        onClick={close}
-      />
+      <div className="absolute inset-0 bg-black/95" onClick={close} />
 
-      {/* Modal panel — fully opaque, above the backdrop */}
       <div
         className="relative w-full max-w-sm rounded-lg overflow-hidden shadow-2xl border border-ink-700"
         style={{ backgroundColor: "#0F1512" }}
@@ -95,11 +106,21 @@ export function GearButton() {
           </h2>
 
           {role ? (
-            <div className="space-y-6">
+            <div className="space-y-5">
               <p className="text-sm text-ink-300">
                 You are signed in as{" "}
                 <span className="text-ink-100 font-medium">{role}</span>.
               </p>
+
+              {showDestination && (
+                <button
+                  onClick={goToArea}
+                  className="w-full h-11 rounded-md bg-schloss text-white hover:bg-schloss-bright transition-colors text-sm font-medium"
+                >
+                  {destinationLabel} →
+                </button>
+              )}
+
               <div className="flex gap-3">
                 <button
                   onClick={close}
@@ -126,9 +147,7 @@ export function GearButton() {
                 className="w-full h-12 px-4 bg-ink-950 border border-ink-700 rounded-md text-ink-100 placeholder-ink-500 focus:border-schloss-bright focus:outline-none transition-colors"
                 autoComplete="current-password"
               />
-              {error && (
-                <div className="text-sm text-tbc">{error}</div>
-              )}
+              {error && <div className="text-sm text-tbc">{error}</div>}
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
