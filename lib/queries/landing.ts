@@ -83,3 +83,4 @@ export async function getLandingData(): Promise<LandingData | null> {
     sessions,
   };
 }
+
