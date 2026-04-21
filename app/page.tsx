@@ -124,12 +124,22 @@ export default async function Home() {
           </div>
 
           <TeamCrest
-            team={teamB.name === "Sandbaggers" ? "sandbaggers" : "tbc"}
+            team="tbc"
             name={teamB.name}
             captain={teamB.captain?.display_name ?? "—"}
             players={teamB.player_count}
             handicapTotal={teamB.handicap_total ?? 0}
             align="left"
+          />
+
+          
+          <TeamCrest
+            team="sandbaggers"
+            name={teamA.name}
+            captain={teamA.captain?.display_name ?? "—"}
+            players={teamA.player_count}
+            handicapTotal={teamA.handicap_total ?? 0}
+            align="right"
           />
         </div>
       </section>
