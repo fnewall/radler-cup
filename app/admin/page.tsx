@@ -13,11 +13,11 @@ type Tile = {
 
 const TILES: Tile[] = [
   { label: "Players", desc: "Names · handicaps · teams", count: "24", href: "/admin/players" },
-  { label: "Teams", desc: "Names · colours · captains", count: "2" },
+  { label: "Teams", desc: "Names · colours · captains", count: "2", href: "/admin/teams" },
   { label: "Course", desc: "Par · stroke index · yardages", count: "18" },
   { label: "Sessions", desc: "Dates · times · formats", count: "5", href: "/admin/sessions" },
   { label: "Rules", desc: "Allowance · points · tiebreaker", count: "—" },
-  { label: "Passwords", desc: "Player · captain · admin", count: "4" },
+  { label: "Passwords", desc: "Player · captain · admin", count: "4", href: "/admin/passwords" },
 ];
 
 export default async function AdminPage() {
