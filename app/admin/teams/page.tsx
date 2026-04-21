@@ -29,19 +29,14 @@ export default async function TeamsAdminPage() {
   const [{ data: teams }, { data: players }] = await Promise.all([
     supabase
       .from("team")
-      .select("id, name, display_code, colour_primary, colour_dark_text, colour_bg_tint, colour_border, captain_player_id")
+      .select("id, name, display_code, display_order, colour_primary, colour_dark_text, colour_bg_tint, colour_border, captain_player_id")
       .eq("tournament_id", tournament.id)
-      .order("name"),
+      .order("display_order", { ascending: true, nullsFirst: false }),
     supabase
       .from("player")
       .select("id, display_name, team_id")
       .eq("tournament_id", tournament.id),
   ]);
-
-  // Keep Sandbaggers first if present
-  const sortedTeams = (teams ?? []).sort((a, b) =>
-    a.name === "Sandbaggers" ? -1 : b.name === "Sandbaggers" ? 1 : 0
-  );
 
   return (
     <main className="min-h-screen bg-radial-schloss texture-noise">
@@ -66,13 +61,12 @@ export default async function TeamsAdminPage() {
             Teams
           </h1>
           <p className="text-ink-300 text-base max-w-2xl leading-relaxed">
-            Rename teams, change the captain, tweak colours. Preview shows how
-            the colour set looks together.
+            Rename teams, change the captain, swap which team shows first on the home page, and tweak colours. The preview shows how the colour set looks together.
           </p>
         </div>
 
         <TeamsEditor
-          initialTeams={sortedTeams}
+          initialTeams={teams ?? []}
           players={players ?? []}
         />
       </section>
