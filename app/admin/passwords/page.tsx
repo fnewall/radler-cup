@@ -59,7 +59,7 @@ export default async function PasswordsAdminPage() {
             Passwords
           </h1>
           <p className="text-ink-300 text-base max-w-2xl leading-relaxed">
-            Change any of the four passwords. Once saved, the old value stops working immediately on every device.
+            View and change all four passwords. Existing passwords set before this feature can&apos;t be shown — rotate them once below and they&apos;ll appear.
           </p>
         </div>
 
