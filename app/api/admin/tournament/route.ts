@@ -9,6 +9,9 @@ type Patch = {
   points_to_win?: number;
   points_to_tie?: number;
   tiebreaker_rule?: string | null;
+  max_strokes_per_hole?: number | null;
+  end_match_early?: boolean;
+  concession_enabled?: boolean;
 };
 
 function validateDate(v: unknown): string | null | false {
@@ -66,6 +69,34 @@ function validate(body: unknown): Patch | { error: string } {
     }
   }
 
+  if ("max_strokes_per_hole" in b) {
+    if (b.max_strokes_per_hole === null || b.max_strokes_per_hole === "") {
+      out.max_strokes_per_hole = null;
+    } else if (
+      typeof b.max_strokes_per_hole === "number" &&
+      b.max_strokes_per_hole >= 1 &&
+      b.max_strokes_per_hole <= 4
+    ) {
+      out.max_strokes_per_hole = Math.round(b.max_strokes_per_hole);
+    } else {
+      return { error: "max_strokes_per_hole must be 1–4 or blank" };
+    }
+  }
+
+  if ("end_match_early" in b) {
+    if (typeof b.end_match_early !== "boolean") {
+      return { error: "end_match_early must be boolean" };
+    }
+    out.end_match_early = b.end_match_early;
+  }
+
+  if ("concession_enabled" in b) {
+    if (typeof b.concession_enabled !== "boolean") {
+      return { error: "concession_enabled must be boolean" };
+    }
+    out.concession_enabled = b.concession_enabled;
+  }
+
   if (Object.keys(out).length === 0) return { error: "No fields to update" };
   return out;
 }
@@ -87,7 +118,6 @@ export async function PATCH(req: Request) {
   }
 
   const supabase = createAdminClient();
-  // Fetch the single tournament id
   const { data: existing, error: fetchErr } = await supabase
     .from("tournament")
     .select("id")
