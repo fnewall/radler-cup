@@ -29,7 +29,7 @@ export default async function SessionsAdminPage() {
   const [{ data: sessions }, { data: course }] = await Promise.all([
     supabase
       .from("session")
-      .select("id, session_number, label, day_number, start_at, format, match_count, points_per_match, tees_used")
+      .select("id, session_number, label, day_number, start_at, format, match_count, points_per_match, tees_used, handicap_allowance")
       .eq("tournament_id", tournament.id)
       .order("session_number", { ascending: true }),
     supabase
@@ -61,13 +61,13 @@ export default async function SessionsAdminPage() {
       <section className="px-6 md:px-10 pt-8 pb-20 max-w-4xl mx-auto">
         <div className="mb-12">
           <div className="text-eyebrow uppercase text-schloss-bright mb-3">
-            Schedule · Tournament & Sessions
+            Schedule &amp; Allowances
           </div>
           <h1 className="font-display text-hero text-ink-100 leading-[0.9] mb-4">
             Sessions
           </h1>
           <p className="text-ink-300 text-base max-w-2xl leading-relaxed">
-            Set tournament dates and per-session start times, formats, and match counts. Changes save on blur.
+            Tournament dates, per-session start times, formats, and handicap allowances. Changes save on blur.
           </p>
         </div>
 
