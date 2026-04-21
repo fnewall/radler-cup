@@ -24,7 +24,8 @@ export async function getLandingData(): Promise<LandingData | null> {
   const { data: teamsRaw, error: teamErr } = await supabase
     .from("team")
     .select("*")
-    .eq("tournament_id", tournament.id);
+    .eq("tournament_id", tournament.id)
+    .order("display_order", { ascending: true, nullsFirst: false });
 
   if (teamErr || !teamsRaw) {
     console.error("Failed to load teams:", teamErr);
@@ -61,11 +62,6 @@ export async function getLandingData(): Promise<LandingData | null> {
     };
   });
 
-  // Conventional order: Sandbaggers on the left, other team on the right
-  teams.sort((a, b) =>
-    a.name === "Sandbaggers" ? -1 : b.name === "Sandbaggers" ? 1 : 0
-  );
-
   const { data: sessions, error: sErr } = await supabase
     .from("session")
     .select("*")
@@ -83,4 +79,3 @@ export async function getLandingData(): Promise<LandingData | null> {
     sessions,
   };
 }
-
