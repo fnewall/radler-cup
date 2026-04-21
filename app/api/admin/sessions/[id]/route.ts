@@ -5,6 +5,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const FORMATS = ["foursomes", "betterball", "greensomes", "scramble_2v2", "singles"] as const;
 type Format = (typeof FORMATS)[number];
 
+const ALLOWANCE_TYPES = [
+  "combined_diff",
+  "individual",
+  "split",
+  "individual_diff",
+  "flat",
+] as const;
+type AllowanceType = (typeof ALLOWANCE_TYPES)[number];
+
+type Allowance =
+  | { type: "combined_diff"; pct: number }
+  | { type: "individual"; pct: number }
+  | { type: "split"; low_pct: number; high_pct: number }
+  | { type: "individual_diff"; pct: number }
+  | { type: "flat"; pct: number };
+
 type Patch = {
   label?: string;
   start_at?: string | null;
@@ -12,7 +28,28 @@ type Patch = {
   match_count?: number;
   points_per_match?: number;
   tees_used?: string | null;
+  handicap_allowance?: Allowance;
 };
+
+function pctOk(n: unknown): n is number {
+  return typeof n === "number" && n >= 0 && n <= 200 && !Number.isNaN(n);
+}
+
+function validateAllowance(v: unknown): Allowance | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o.type !== "string" || !ALLOWANCE_TYPES.includes(o.type as AllowanceType)) {
+    return null;
+  }
+  const t = o.type as AllowanceType;
+
+  if (t === "split") {
+    if (!pctOk(o.low_pct) || !pctOk(o.high_pct)) return null;
+    return { type: "split", low_pct: o.low_pct, high_pct: o.high_pct };
+  }
+  if (!pctOk(o.pct)) return null;
+  return { type: t, pct: o.pct } as Allowance;
+}
 
 function validate(body: unknown): Patch | { error: string } {
   if (!body || typeof body !== "object") return { error: "Invalid body" };
@@ -67,6 +104,12 @@ function validate(body: unknown): Patch | { error: string } {
     } else {
       return { error: "tees_used invalid" };
     }
+  }
+
+  if ("handicap_allowance" in b) {
+    const a = validateAllowance(b.handicap_allowance);
+    if (!a) return { error: "handicap_allowance invalid" };
+    out.handicap_allowance = a;
   }
 
   if (Object.keys(out).length === 0) return { error: "No fields to update" };
