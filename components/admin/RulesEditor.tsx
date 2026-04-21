@@ -66,7 +66,9 @@ export function RulesEditor({ tournament: t0 }: { tournament: Tournament }) {
               Max strokes received per hole
             </div>
             <div className="text-xs text-ink-400 mt-1 max-w-md leading-relaxed">
-              Applied <em>after</em> the session&apos;s handicap allowance. Leave blank for no cap. Common values: 1 or 2.
+              Applied <em>after</em>{" "}
+              the session&apos;s handicap allowance. Leave blank for no cap.
+              Common values: 1 or 2.
             </div>
           </div>
           <SaveIndicator state={state} />
@@ -125,7 +127,9 @@ export function RulesEditor({ tournament: t0 }: { tournament: Tournament }) {
               Tiebreaker rule (at 18–18)
             </div>
             <div className="text-xs text-ink-400 mt-1 max-w-md leading-relaxed">
-              Free text. Shown on the leaderboard if the final score is a tie. Examples: &ldquo;Holder retains the cup&rdquo;, &ldquo;Most singles matches won&rdquo;, &ldquo;Captain&apos;s playoff&rdquo;.
+              Free text. Shown on the leaderboard if the final score is a tie.
+              Examples: &ldquo;Holder retains the cup&rdquo;, &ldquo;Most
+              singles matches won&rdquo;, &ldquo;Captain&apos;s playoff&rdquo;.
             </div>
           </div>
         </div>
