@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 type Patch = {
   name?: string;
   display_code?: string;
+  display_order?: number;
   colour_primary?: string;
   colour_dark_text?: string;
   colour_bg_tint?: string;
@@ -31,6 +32,13 @@ function validate(body: unknown): Patch | { error: string } {
     const t = b.display_code.trim();
     if (t.length < 1 || t.length > 3) return { error: "display_code must be 1–3 chars" };
     out.display_code = t.toUpperCase();
+  }
+
+  if ("display_order" in b) {
+    if (typeof b.display_order !== "number" || b.display_order < 1 || b.display_order > 99) {
+      return { error: "display_order invalid" };
+    }
+    out.display_order = Math.round(b.display_order);
   }
 
   for (const k of ["colour_primary", "colour_dark_text", "colour_bg_tint", "colour_border"] as const) {
@@ -79,7 +87,6 @@ export async function PATCH(
 
   const supabase = createAdminClient();
 
-  // If setting a captain, verify they're on this team
   if (validated.captain_player_id) {
     const { data: player } = await supabase
       .from("player")
