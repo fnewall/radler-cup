@@ -47,7 +47,6 @@ export async function PATCH(req: Request) {
 
   const supabase = createAdminClient();
 
-  // Verify the row exists
   const { data: existing, error: fetchErr } = await supabase
     .from("app_password")
     .select("id, role")
@@ -62,7 +61,10 @@ export async function PATCH(req: Request) {
 
   const { error } = await supabase
     .from("app_password")
-    .update({ password_hash: hash })
+    .update({
+      password_hash: hash,
+      password_plain: trimmed,
+    })
     .eq("id", password_id);
 
   if (error) {
