@@ -13,6 +13,13 @@ type Tournament = {
   tiebreaker_rule: string | null;
 };
 
+type Allowance =
+  | { type: "combined_diff"; pct: number }
+  | { type: "individual"; pct: number }
+  | { type: "split"; low_pct: number; high_pct: number }
+  | { type: "individual_diff"; pct: number }
+  | { type: "flat"; pct: number };
+
 type Session = {
   id: string;
   session_number: number;
@@ -23,6 +30,7 @@ type Session = {
   match_count: number;
   points_per_match: number;
   tees_used: string | null;
+  handicap_allowance: Allowance | Record<string, never>;
 };
 
 type Tees = { name: string };
@@ -42,6 +50,24 @@ const FORMAT_LABELS: Record<Session["format"], string> = {
   scramble_2v2: "Scramble 2v2",
   singles: "Singles",
 };
+
+const ALLOWANCE_TYPE_LABELS: Record<Allowance["type"], string> = {
+  combined_diff: "Combined difference",
+  individual: "Per player",
+  split: "Split (low / high)",
+  individual_diff: "Individual difference",
+  flat: "Flat combined",
+};
+
+function allowanceSummary(a: Session["handicap_allowance"]): string {
+  if (!a || !("type" in a)) return "—";
+  switch (a.type) {
+    case "split":
+      return `${a.low_pct}% low · ${a.high_pct}% high`;
+    default:
+      return `${a.pct}% · ${ALLOWANCE_TYPE_LABELS[a.type]}`;
+  }
+}
 
 function SaveIndicator({ state }: { state: SaveState }) {
   return (
@@ -219,6 +245,7 @@ export function SessionsEditor({ tournament: t0, sessions: s0, tees }: Props) {
               const state = states[s.id] ?? "idle";
               const error = errors[s.id];
               const display = formatViennaDisplay(s.start_at);
+              const allowanceDisplay = allowanceSummary(s.handicap_allowance);
 
               return (
                 <div
@@ -235,7 +262,7 @@ export function SessionsEditor({ tournament: t0, sessions: s0, tees }: Props) {
                           {s.label}
                         </div>
                         <div className="text-xs text-ink-400 mt-0.5">
-                          {display}
+                          {display} · {allowanceDisplay}
                         </div>
                       </div>
                     </div>
@@ -336,11 +363,193 @@ export function SessionsEditor({ tournament: t0, sessions: s0, tees }: Props) {
                       />
                     </Field>
                   </div>
+
+                  <AllowanceEditor
+                    allowance={s.handicap_allowance as Allowance | undefined}
+                    format={s.format}
+                    onSave={(a) => saveSession(s.id, { handicap_allowance: a })}
+                  />
                 </div>
               );
             })}
         </div>
       </div>
+    </div>
+  );
+}
+
+function AllowanceEditor({
+  allowance,
+  format,
+  onSave,
+}: {
+  allowance: Allowance | undefined;
+  format: Session["format"];
+  onSave: (a: Allowance) => void;
+}) {
+  const initial: Allowance = allowance && "type" in allowance
+    ? allowance
+    : { type: "flat", pct: 100 };
+
+  const [type, setType] = useState<Allowance["type"]>(initial.type);
+  const [pct, setPct] = useState<number>(
+    initial.type === "split" ? 50 : initial.pct
+  );
+  const [lowPct, setLowPct] = useState<number>(
+    initial.type === "split" ? initial.low_pct : 60
+  );
+  const [highPct, setHighPct] = useState<number>(
+    initial.type === "split" ? initial.high_pct : 40
+  );
+
+  function commit() {
+    const next: Allowance =
+      type === "split"
+        ? { type: "split", low_pct: lowPct, high_pct: highPct }
+        : ({ type, pct } as Allowance);
+
+    // Only save if different
+    const same =
+      allowance && "type" in allowance &&
+      allowance.type === next.type &&
+      (next.type === "split"
+        ? allowance.type === "split" &&
+          allowance.low_pct === next.low_pct &&
+          allowance.high_pct === next.high_pct
+        : "pct" in allowance && (allowance as { pct: number }).pct === (next as { pct: number }).pct);
+
+    if (!same) onSave(next);
+  }
+
+  function applyTraditional() {
+    let next: Allowance;
+    switch (format) {
+      case "foursomes":
+        next = { type: "combined_diff", pct: 50 };
+        break;
+      case "betterball":
+        next = { type: "individual", pct: 85 };
+        break;
+      case "greensomes":
+        next = { type: "split", low_pct: 60, high_pct: 40 };
+        break;
+      case "scramble_2v2":
+        next = { type: "split", low_pct: 35, high_pct: 15 };
+        break;
+      case "singles":
+        next = { type: "individual_diff", pct: 100 };
+        break;
+    }
+    setType(next.type);
+    if (next.type === "split") {
+      setLowPct(next.low_pct);
+      setHighPct(next.high_pct);
+    } else {
+      setPct(next.pct);
+    }
+    onSave(next);
+  }
+
+  function applyFlat75() {
+    const next: Allowance = { type: "flat", pct: 75 };
+    setType("flat");
+    setPct(75);
+    onSave(next);
+  }
+
+  return (
+    <div className="mt-6 pt-5 border-t border-ink-800">
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-eyebrow uppercase text-ink-500">
+          Handicap Allowance
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={applyTraditional}
+            className="h-8 px-3 rounded border border-ink-700 text-ink-300 hover:text-ink-100 hover:border-ink-500 transition-colors text-xs"
+          >
+            R&amp;A default
+          </button>
+          <button
+            onClick={applyFlat75}
+            className="h-8 px-3 rounded border border-ink-700 text-ink-300 hover:text-ink-100 hover:border-ink-500 transition-colors text-xs"
+          >
+            Flat 75%
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <Field label="Type">
+          <select
+            value={type}
+            onChange={(e) => {
+              const t = e.target.value as Allowance["type"];
+              setType(t);
+              // Commit after state settles
+              setTimeout(() => {
+                const next: Allowance =
+                  t === "split"
+                    ? { type: "split", low_pct: lowPct, high_pct: highPct }
+                    : ({ type: t, pct } as Allowance);
+                onSave(next);
+              }, 0);
+            }}
+            className={inputClass}
+          >
+            {Object.entries(ALLOWANCE_TYPE_LABELS).map(([k, label]) => (
+              <option key={k} value={k}>{label}</option>
+            ))}
+          </select>
+        </Field>
+
+        {type === "split" ? (
+          <>
+            <Field label="Low HCP %">
+              <input
+                type="number"
+                min={0}
+                max={200}
+                value={lowPct}
+                onChange={(e) => setLowPct(parseFloat(e.target.value) || 0)}
+                onBlur={commit}
+                className={inputClass}
+              />
+            </Field>
+            <Field label="High HCP %">
+              <input
+                type="number"
+                min={0}
+                max={200}
+                value={highPct}
+                onChange={(e) => setHighPct(parseFloat(e.target.value) || 0)}
+                onBlur={commit}
+                className={inputClass}
+              />
+            </Field>
+          </>
+        ) : (
+          <Field label="Percentage">
+            <input
+              type="number"
+              min={0}
+              max={200}
+              value={pct}
+              onChange={(e) => setPct(parseFloat(e.target.value) || 0)}
+              onBlur={commit}
+              className={inputClass}
+            />
+          </Field>
+        )}
+      </div>
+
+      <p className="text-xs text-ink-500 mt-3 leading-relaxed">
+        {type === "combined_diff" && "Applied to the pair's combined handicap difference (e.g. Foursomes default)."}
+        {type === "individual" && "Applied to each player's individual handicap (e.g. Betterball default)."}
+        {type === "split" && "Different % for the stronger and weaker handicaps in a pair (e.g. Greensomes default)."}
+        {type === "individual_diff" && "Applied to the difference between two players' handicaps (e.g. Singles default)."}
+        {type === "flat" && "Single % applied uniformly across the pair's combined handicap."}
+      </p>
     </div>
   );
 }
