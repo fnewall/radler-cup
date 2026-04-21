@@ -59,6 +59,36 @@ export function PasswordsEditor({ passwords, teams }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [reveal, setReveal] = useState<Record<string, boolean>>({});
 
+  // View state for the current-passwords section
+  const [viewLoaded, setViewLoaded] = useState(false);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [plaintext, setPlaintext] = useState<Record<string, string | null>>({});
+  const [copied, setCopied] = useState<string | null>(null);
+
+  async function loadPlaintext() {
+    setViewLoading(true);
+    try {
+      const res = await fetch("/api/admin/passwords/reveal", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) {
+        setPlaintext(data.passwords ?? {});
+        setViewLoaded(true);
+      }
+    } finally {
+      setViewLoading(false);
+    }
+  }
+
+  async function copyValue(id: string, val: string) {
+    try {
+      await navigator.clipboard.writeText(val);
+      setCopied(id);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      // ignore
+    }
+  }
+
   async function save(id: string) {
     const pw = values[id]?.trim();
     if (!pw) return;
@@ -82,6 +112,10 @@ export function PasswordsEditor({ passwords, teams }: Props) {
       setStates((s) => ({ ...s, [id]: "saved" }));
       setValues((v) => ({ ...v, [id]: "" }));
       setReveal((r) => ({ ...r, [id]: false }));
+      // Optimistically update the plaintext cache if it's loaded
+      if (viewLoaded) {
+        setPlaintext((p) => ({ ...p, [id]: pw }));
+      }
       setTimeout(() => setStates((s) => ({ ...s, [id]: "idle" })), 2000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Save failed";
@@ -90,7 +124,6 @@ export function PasswordsEditor({ passwords, teams }: Props) {
     }
   }
 
-  // Sort: admin first, then player, then captains (alphabetical by team name)
   const sorted = [...passwords].sort((a, b) => {
     const order = { admin: 0, player: 1, captain: 2 } as const;
     if (order[a.role] !== order[b.role]) return order[a.role] - order[b.role];
@@ -102,11 +135,92 @@ export function PasswordsEditor({ passwords, teams }: Props) {
     return 0;
   });
 
+  const anyMissing = sorted.some(
+    (p) => viewLoaded && (plaintext[p.id] === null || plaintext[p.id] === undefined)
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Current passwords — gated */}
+      <div className="bg-ink-950 border border-ink-800 rounded-sm overflow-hidden">
+        <div className="p-5 border-b border-ink-800 flex items-center justify-between">
+          <div>
+            <div className="text-eyebrow uppercase text-schloss-bright mb-1">
+              Current Passwords
+            </div>
+            <div className="text-xs text-ink-400 leading-relaxed max-w-md">
+              Plaintext values are stored only for admin reference. Don&apos;t show this screen to anyone you wouldn&apos;t give all four passwords to.
+            </div>
+          </div>
+          {viewLoaded ? (
+            <button
+              onClick={() => {
+                setViewLoaded(false);
+                setPlaintext({});
+              }}
+              className="h-10 px-4 rounded border border-ink-700 text-ink-300 hover:text-ink-100 hover:border-ink-500 transition-colors text-sm"
+            >
+              Hide
+            </button>
+          ) : (
+            <button
+              onClick={loadPlaintext}
+              disabled={viewLoading}
+              className="h-10 px-4 rounded bg-schloss text-white hover:bg-schloss-bright transition-colors text-sm font-medium disabled:opacity-50"
+            >
+              {viewLoading ? "Loading…" : "Show passwords"}
+            </button>
+          )}
+        </div>
+
+        {viewLoaded && (
+          <div className="divide-y divide-ink-800">
+            {sorted.map((p) => {
+              const val = plaintext[p.id];
+              const wasCopied = copied === p.id;
+              return (
+                <div
+                  key={p.id}
+                  className="px-5 py-4 flex items-center justify-between gap-4"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs text-ink-400 uppercase tracking-wide mb-0.5">
+                      {passwordLabel(p, teams)}
+                    </div>
+                    {val ? (
+                      <div className="font-mono tabular text-ink-100 text-sm truncate">
+                        {val}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-ink-500 italic">
+                        Not yet available — change this password below to store it.
+                      </div>
+                    )}
+                  </div>
+                  {val && (
+                    <button
+                      onClick={() => copyValue(p.id, val)}
+                      className="shrink-0 h-9 px-3 rounded border border-ink-700 text-ink-300 hover:text-schloss-bright hover:border-schloss-bright transition-colors text-xs"
+                    >
+                      {wasCopied ? "Copied ✓" : "Copy"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {anyMissing && (
+              <div className="px-5 py-3 bg-ink-900 text-xs text-ink-400 leading-relaxed">
+                Passwords set before this feature existed can&apos;t be recovered — the hashes are one-way. Use &ldquo;Change&rdquo; below to set a new value and it&apos;ll appear here.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Change passwords */}
       <div className="bg-ink-950 border border-ink-800 rounded-sm p-5 text-sm text-ink-300 leading-relaxed">
-        For security, existing passwords cannot be displayed — only replaced.
-        Write down the new value before saving.
+        Setting a new password immediately invalidates the old one on every device.
       </div>
 
       {sorted.map((p) => {
