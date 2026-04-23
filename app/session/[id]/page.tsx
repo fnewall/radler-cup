@@ -102,18 +102,12 @@ function PairingsPending({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto">
         {teamA && (
-          <CaptainStatusCard
-            team={teamA}
-            submitted={submittedA}
-          />
+          <CaptainStatusCard team={teamA} submitted={submittedA} />
         )}
         {teamB && (
-          <CaptainStatusCard
-            team={teamB}
-            submitted={submittedB}
-          />
+          <CaptainStatusCard team={teamB} submitted={submittedB} />
         )}
       </div>
     </div>
@@ -150,16 +144,32 @@ function CaptainStatusCard({
   );
 }
 
+type MatchItem = {
+  id: string;
+  match_order: number;
+  status: string;
+  winning_team_id: string | null;
+  points_team_a: number;
+  points_team_b: number;
+  ended_on_hole: number | null;
+  team_a: MatchSideData;
+  team_b: MatchSideData;
+};
+
+type MatchSideData = {
+  team_id: string;
+  team_name: string;
+  team_display_code: string;
+  team_colour: string;
+  players: Array<{ id: string; display_name: string; handicap: number | null; slot: number }>;
+};
+
 function MatchesList({
   matches,
   teamA,
   teamB,
 }: {
-  matches: Awaited<ReturnType<typeof getSessionDetail>> extends infer T
-    ? T extends { matches: infer M }
-      ? M
-      : never
-    : never;
+  matches: MatchItem[];
   teamA?: { id: string; name: string; colour_primary: string };
   teamB?: { id: string; name: string; colour_primary: string };
 }) {
@@ -173,7 +183,7 @@ function MatchesList({
 
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-6">
+      <div className="flex items-baseline justify-between mb-6 flex-wrap gap-3">
         <div className="text-eyebrow uppercase text-schloss-bright">
           Matches · {matches.length}
         </div>
@@ -188,52 +198,96 @@ function MatchesList({
 
       <div className="space-y-2">
         {matches.map((m) => (
-          <Link
-            key={m.id}
-            href={`/match/${m.id}`}
-            className="block bg-ink-950 border border-ink-800 rounded-sm hover:border-ink-700 hover:bg-ink-900 transition-colors overflow-hidden"
-          >
-            <div className="grid grid-cols-[56px_1fr_auto_1fr_56px] items-center gap-2 md:gap-4">
-              <div
-                className="h-full flex items-center justify-center py-4 border-r border-ink-800 font-mono tabular text-xl font-light"
-                style={{ color: "rgb(61, 179, 101)" }}
-              >
-                {String(m.match_order).padStart(2, "0")}
-              </div>
-
-              <SidePanel side={m.team_a} align="right" />
-
-              <div className="text-eyebrow uppercase text-ink-500 px-1 md:px-2">
-                vs
-              </div>
-
-              <SidePanel side={m.team_b} align="left" />
-
-              <div className="h-full flex items-center justify-center border-l border-ink-800 py-4">
-                <StatusBadge match={m} />
-              </div>
-            </div>
-          </Link>
+          <MatchCard key={m.id} match={m} />
         ))}
       </div>
     </div>
   );
 }
 
-function SidePanel({
+function MatchCard({ match }: { match: MatchItem }) {
+  return (
+    <Link
+      href={`/match/${match.id}`}
+      className="block bg-ink-950 border border-ink-800 rounded-sm hover:border-ink-700 hover:bg-ink-900 transition-colors overflow-hidden"
+    >
+      {/* Mobile layout: stacked */}
+      <div className="md:hidden p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div
+            className="font-mono tabular text-base font-light text-schloss-bright"
+          >
+            Match {String(match.match_order).padStart(2, "0")}
+          </div>
+          <StatusBadge match={match} />
+        </div>
+
+        <div className="space-y-3">
+          <SideMobile side={match.team_a} />
+          <div className="text-center text-eyebrow uppercase text-ink-600 text-[10px]">
+            vs
+          </div>
+          <SideMobile side={match.team_b} />
+        </div>
+      </div>
+
+      {/* Desktop layout: horizontal */}
+      <div className="hidden md:grid md:grid-cols-[72px_1fr_auto_1fr_96px] items-stretch">
+        <div className="flex items-center justify-center py-4 border-r border-ink-800 font-mono tabular text-xl font-light text-schloss-bright">
+          {String(match.match_order).padStart(2, "0")}
+        </div>
+
+        <SideDesktop side={match.team_a} align="right" />
+
+        <div className="flex items-center justify-center px-2 text-eyebrow uppercase text-ink-600">
+          vs
+        </div>
+
+        <SideDesktop side={match.team_b} align="left" />
+
+        <div className="flex items-center justify-center border-l border-ink-800 py-4">
+          <StatusBadge match={match} />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function SideMobile({ side }: { side: MatchSideData }) {
+  return (
+    <div>
+      <div
+        className="text-eyebrow uppercase mb-1.5"
+        style={{ color: side.team_colour }}
+      >
+        {side.team_display_code} · {side.team_name}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+        {side.players.map((p) => (
+          <div key={p.slot} className="text-sm text-ink-100 flex items-baseline gap-1.5">
+            <span>{p.display_name}</span>
+            {p.handicap !== null && (
+              <span className="font-mono tabular text-xs text-ink-500">
+                {p.handicap}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SideDesktop({
   side,
   align,
 }: {
-  side: {
-    team_colour: string;
-    team_display_code: string;
-    players: Array<{ display_name: string; handicap: number | null; slot: number }>;
-  };
+  side: MatchSideData;
   align: "left" | "right";
 }) {
   return (
     <div
-      className={`py-4 px-2 md:px-3 flex flex-col ${
+      className={`py-4 px-4 flex flex-col justify-center ${
         align === "right" ? "items-end text-right" : "items-start text-left"
       }`}
     >
@@ -247,8 +301,9 @@ function SidePanel({
         {side.players.map((p) => (
           <div
             key={p.slot}
-            className="text-sm text-ink-100 leading-tight flex items-baseline gap-2 justify-inherit"
-            style={{ flexDirection: align === "right" ? "row-reverse" : "row" }}
+            className={`text-sm text-ink-100 leading-tight flex items-baseline gap-2 ${
+              align === "right" ? "flex-row-reverse" : ""
+            }`}
           >
             <span>{p.display_name}</span>
             {p.handicap !== null && (
@@ -263,15 +318,7 @@ function SidePanel({
   );
 }
 
-function StatusBadge({
-  match,
-}: {
-  match: {
-    status: string;
-    winning_team_id: string | null;
-    ended_on_hole: number | null;
-  };
-}) {
+function StatusBadge({ match }: { match: MatchItem }) {
   if (match.status === "pending") {
     return (
       <div className="text-eyebrow uppercase text-ink-500 text-center">
