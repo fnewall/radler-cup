@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Countdown } from "@/components/Countdown";
 import { TeamCrest } from "@/components/TeamCrest";
 import { GearButton } from "@/components/GearButton";
@@ -138,24 +139,37 @@ export default async function Home() {
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-px bg-ink-800 border border-ink-800 rounded-sm overflow-hidden">
           {sessions.map((s) => (
-            <div key={s.id} className="bg-ink-950 p-6 hover:bg-ink-900 transition-colors">
-              <div className="text-eyebrow uppercase text-schloss-bright mb-4">
-                Session {s.session_number}
+            <Link
+              key={s.id}
+              href={`/session/${s.id}`}
+              className="bg-ink-950 p-6 hover:bg-ink-900 transition-colors block group"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="text-eyebrow uppercase text-schloss-bright">
+                  Session {s.session_number}
+                </div>
+                <SessionStatusDot session={s} />
               </div>
+
               <div className="text-ink-400 text-sm">
                 {DAY_LABELS[s.day_number] ?? `Day ${s.day_number}`}
               </div>
-              <div className="text-ink-300 text-sm mb-6">{sessionTimeLabel(s)}</div>
+              <div className="text-ink-300 text-sm mb-5">{sessionTimeLabel(s)}</div>
+
               <div className="font-display text-2xl text-ink-100 leading-tight">
                 {FORMAT_LABELS[s.format] ?? s.format}
               </div>
-              <div className="mt-4 flex items-baseline gap-2">
-                <span className="font-mono tabular text-2xl text-ink-100">
-                  {s.match_count * s.points_per_match}
-                </span>
-                <span className="text-eyebrow uppercase text-ink-500">pts</span>
+
+              <div className="mt-4 flex items-baseline justify-between">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono tabular text-2xl text-ink-100">
+                    {s.match_count * s.points_per_match}
+                  </span>
+                  <span className="text-eyebrow uppercase text-ink-500">pts</span>
+                </div>
+                <SessionLinkLabel session={s} />
               </div>
-            </div>
+            </Link>
           ))}
         </div>
 
@@ -193,5 +207,53 @@ export default async function Home() {
         </div>
       </footer>
     </main>
+  );
+}
+
+function SessionStatusDot({
+  session,
+}: {
+  session: { status: string; pairings_revealed: boolean };
+}) {
+  if (session.status === "in_progress") {
+    return (
+      <div className="flex items-center gap-1.5">
+        <div className="w-1.5 h-1.5 rounded-full bg-schloss-bright animate-pulse-live" />
+        <span className="text-eyebrow uppercase text-schloss-bright">Live</span>
+      </div>
+    );
+  }
+  if (session.status === "complete") {
+    return (
+      <span className="text-eyebrow uppercase text-ink-500">Final</span>
+    );
+  }
+  if (session.pairings_revealed) {
+    return (
+      <span className="text-eyebrow uppercase text-schloss-bright">Revealed</span>
+    );
+  }
+  return (
+    <span className="text-eyebrow uppercase text-ink-600">Upcoming</span>
+  );
+}
+
+function SessionLinkLabel({
+  session,
+}: {
+  session: { status: string; pairings_revealed: boolean };
+}) {
+  const label =
+    session.status === "in_progress"
+      ? "View live →"
+      : session.status === "complete"
+        ? "View result →"
+        : session.pairings_revealed
+          ? "View matches →"
+          : "View →";
+  return (
+    <span className="text-eyebrow uppercase text-schloss-bright opacity-0 group-hover:opacity-100 transition-opacity">
+      {label}
+    </span>
   );
 }
