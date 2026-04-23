@@ -11,10 +11,8 @@ export type BetterballInput = {
 };
 
 export type StrokesForHole = {
-  // For pair formats: pair-level strokes (either 0 or N)
   team_a_pair?: number;
   team_b_pair?: number;
-  // For betterball: per-player strokes by player_id
   team_a_players?: Record<string, number>;
   team_b_players?: Record<string, number>;
 };
@@ -27,18 +25,22 @@ export type PlayerIdMap = {
 };
 
 export type HoleComputation = {
-  // Canonical stored shape: team_a.net, team_b.net, plus any gross inputs preserved
   stored_scores: Record<string, unknown>;
   team_a_net: number | null;
   team_b_net: number | null;
   result: "team_a" | "team_b" | "halved" | "conceded_to_a" | "conceded_to_b";
 };
 
-/**
- * Compute net scores and hole result for a non-conceded hole.
- * For betterball: picks the better net within each pair.
- * For all other formats: uses the single pair/singles score minus pair strokes.
- */
+function lookupStrokes(
+  pid: string | undefined,
+  map: Record<string, number> | undefined
+): number {
+  if (!pid) return 0;
+  if (!map) return 0;
+  const v = map[pid];
+  return typeof v === "number" ? v : 0;
+}
+
 export function computeHoleResult(
   format: Format,
   grossInputs: FoursomesInput | BetterballInput,
@@ -53,14 +55,10 @@ export function computeHoleResult(
     const bP1Gross = bb.team_b.p1_gross;
     const bP2Gross = bb.team_b.p2_gross;
 
-    const aP1Strokes =
-      (playerIds.team_a_p1 && strokes.team_a_players?.[playerIds.team_a_p1]) ?? 0;
-    const aP2Strokes =
-      (playerIds.team_a_p2 && strokes.team_a_players?.[playerIds.team_a_p2]) ?? 0;
-    const bP1Strokes =
-      (playerIds.team_b_p1 && strokes.team_b_players?.[playerIds.team_b_p1]) ?? 0;
-    const bP2Strokes =
-      (playerIds.team_b_p2 && strokes.team_b_players?.[playerIds.team_b_p2]) ?? 0;
+    const aP1Strokes = lookupStrokes(playerIds.team_a_p1, strokes.team_a_players);
+    const aP2Strokes = lookupStrokes(playerIds.team_a_p2, strokes.team_a_players);
+    const bP1Strokes = lookupStrokes(playerIds.team_b_p1, strokes.team_b_players);
+    const bP2Strokes = lookupStrokes(playerIds.team_b_p2, strokes.team_b_players);
 
     const aP1Net = aP1Gross !== null ? aP1Gross - aP1Strokes : null;
     const aP2Net = aP2Gross !== null ? aP2Gross - aP2Strokes : null;
@@ -95,7 +93,6 @@ export function computeHoleResult(
     };
   }
 
-  // Foursomes / Greensomes / Scramble / Singles: one gross each side
   const fs = grossInputs as FoursomesInput;
   const aGross = fs.team_a.gross;
   const bGross = fs.team_b.gross;
@@ -127,17 +124,12 @@ function decideResult(
   a: number | null,
   b: number | null
 ): "team_a" | "team_b" | "halved" {
-  if (a === null || b === null) return "halved"; // incomplete scores default halved
+  if (a === null || b === null) return "halved";
   if (a < b) return "team_a";
   if (b < a) return "team_b";
   return "halved";
 }
 
-/**
- * For a conceded hole, optional gross scores can still be recorded. If blank,
- * we default to net double bogey = par + 2 (total strokes, net of handicap).
- * Gross = par + 2 + strokes received. Stored for stats but displayed as "—".
- */
 export function computeConcededHole(
   format: Format,
   concededTo: "team_a" | "team_b",
@@ -146,8 +138,6 @@ export function computeConcededHole(
   strokes: StrokesForHole,
   playerIds: PlayerIdMap
 ): HoleComputation {
-  // The *losing* side (the one who conceded) is the other team. Their score
-  // defaults to net double bogey. The winning side has no gross entry at all.
   const losingSide = concededTo === "team_a" ? "team_b" : "team_a";
   const result = concededTo === "team_a" ? "conceded_to_a" : "conceded_to_b";
 
@@ -157,16 +147,11 @@ export function computeConcededHole(
       team_b: { p1_gross: null, p2_gross: null },
     };
 
-    const aP1Strokes =
-      (playerIds.team_a_p1 && strokes.team_a_players?.[playerIds.team_a_p1]) ?? 0;
-    const aP2Strokes =
-      (playerIds.team_a_p2 && strokes.team_a_players?.[playerIds.team_a_p2]) ?? 0;
-    const bP1Strokes =
-      (playerIds.team_b_p1 && strokes.team_b_players?.[playerIds.team_b_p1]) ?? 0;
-    const bP2Strokes =
-      (playerIds.team_b_p2 && strokes.team_b_players?.[playerIds.team_b_p2]) ?? 0;
+    const aP1Strokes = lookupStrokes(playerIds.team_a_p1, strokes.team_a_players);
+    const aP2Strokes = lookupStrokes(playerIds.team_a_p2, strokes.team_a_players);
+    const bP1Strokes = lookupStrokes(playerIds.team_b_p1, strokes.team_b_players);
+    const bP2Strokes = lookupStrokes(playerIds.team_b_p2, strokes.team_b_players);
 
-    // For losing side: net double bogey = par + 2 net; gross = par + 2 + strokes
     const conceded = (g: number | null, stk: number) =>
       g !== null ? g - stk : par + 2;
 
@@ -186,7 +171,7 @@ export function computeConcededHole(
           p1_net: aP1Net,
           p2_net: aP2Net,
           net: teamANet,
-          conceded: concededTo === "team_a" ? false : losingSide === "team_a",
+          conceded: losingSide === "team_a",
         },
         team_b: {
           p1_gross: bb.team_b.p1_gross,
@@ -203,7 +188,6 @@ export function computeConcededHole(
     };
   }
 
-  // Single-ball formats
   const fs = (grossInputs as FoursomesInput | null) ?? {
     team_a: { gross: null },
     team_b: { gross: null },
