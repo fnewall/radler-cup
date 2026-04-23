@@ -41,8 +41,15 @@ export type MatchDetail = {
   holeScores: HoleScoreRow[];
   evaluation: MatchEvaluation;
   statusText: string;
-  strokesPerPlayer: Record<string, number>; // effective hcp (post allowance)
-  perHoleStrokes: Record<string, Record<number, number>>; // player_id -> hole_number -> strokes
+  strokesPerPlayer: Record<string, number>;
+  perHoleStrokes: Record<string, Record<number, number>>;
+};
+
+type TeamInfo = {
+  id: string;
+  name: string;
+  display_code: string;
+  colour_primary: string;
 };
 
 type TeamSide = {
@@ -84,18 +91,27 @@ export async function getMatchDetail(
     .single();
   if (!tournament) return null;
 
-  // Teams
   const { data: teams } = await supabase
     .from("team")
     .select("id, name, display_code, display_order, colour_primary")
     .eq("tournament_id", tournament.id)
     .order("display_order", { ascending: true, nullsFirst: false });
 
-  const teamA = teams?.[0];
-  const teamB = teams?.[1];
-  if (!teamA || !teamB) return null;
+  if (!teams || teams.length < 2) return null;
 
-  // Pairings
+  const teamA: TeamInfo = {
+    id: teams[0].id,
+    name: teams[0].name,
+    display_code: teams[0].display_code,
+    colour_primary: teams[0].colour_primary,
+  };
+  const teamB: TeamInfo = {
+    id: teams[1].id,
+    name: teams[1].name,
+    display_code: teams[1].display_code,
+    colour_primary: teams[1].colour_primary,
+  };
+
   const pairingIds = [match.team_a_pairing_id, match.team_b_pairing_id];
   const { data: pairingPlayers } = await supabase
     .from("pairing_player")
@@ -113,7 +129,7 @@ export async function getMatchDetail(
 
   const byId = new Map((playerRows ?? []).map((p) => [p.id, p]));
 
-  function makeSide(pairingId: string, team: typeof teamA): TeamSide {
+  function makeSide(pairingId: string, team: TeamInfo): TeamSide {
     const slots = (pairingPlayers ?? [])
       .filter((pp) => pp.pairing_id === pairingId)
       .sort((a, b) => a.slot - b.slot);
@@ -134,7 +150,6 @@ export async function getMatchDetail(
   const teamASide = makeSide(match.team_a_pairing_id, teamA);
   const teamBSide = makeSide(match.team_b_pairing_id, teamB);
 
-  // Course
   const { data: course } = await supabase
     .from("course")
     .select("id")
@@ -155,7 +170,6 @@ export async function getMatchDetail(
     stroke_index: h.stroke_index,
   }));
 
-  // Scores
   const { data: holeScoreRows } = await supabase
     .from("hole_score")
     .select("hole_number, scores, result")
@@ -168,7 +182,6 @@ export async function getMatchDetail(
     result: r.result as HoleScoreRow["result"],
   }));
 
-  // Allowance → strokes per player
   const allowance = (session.handicap_allowance as Allowance) ?? null;
   const effective = computePlayerStrokes(
     allowance,
@@ -185,7 +198,6 @@ export async function getMatchDetail(
     );
   }
 
-  // Evaluate match
   const concededToA = match.status === "conceded" && match.winning_team_id === teamA.id;
   const concededToB = match.status === "conceded" && match.winning_team_id === teamB.id;
   const evaluation = evaluateMatch(
