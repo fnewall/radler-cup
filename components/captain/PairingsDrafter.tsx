@@ -31,7 +31,7 @@ type Props = {
 
 type Slot = {
   match_order: number;
-  player_ids: string[]; // length depends on format
+  player_ids: string[];
 };
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -44,6 +44,26 @@ const FORMAT_LABELS: Record<string, string> = {
 
 function slotSize(format: string): 1 | 2 {
   return format === "singles" ? 1 : 2;
+}
+
+function buildInitialSlots(
+  matchCount: number,
+  existing: ExistingPairing[]
+): Slot[] {
+  const byOrder = new Map<number, Slot>();
+  for (const p of existing) {
+    byOrder.set(p.match_order, {
+      match_order: p.match_order,
+      player_ids: [...p.players]
+        .sort((a, b) => a.slot - b.slot)
+        .map((pp) => pp.player_id),
+    });
+  }
+  const out: Slot[] = [];
+  for (let i = 1; i <= matchCount; i++) {
+    out.push(byOrder.get(i) ?? { match_order: i, player_ids: [] });
+  }
+  return out;
 }
 
 export function PairingsDrafter({
@@ -62,39 +82,7 @@ export function PairingsDrafter({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
-
-  // Initialise slots from existing
-  const [slots, setSlots] = useState<Slot[]>(() => {
-    const byOrder = new Map<number, Slot>();
-    for (const p of existing) {
-      byOrder.set(p.match_order, {
-        match_order: p.match_order,
-        player_ids: p.players
-          .sort((a, b) => a.slot - b.slot)
-          .map((pp) => pp.player_ids)
-          .filter(Boolean)
-          .map((x) => x as unknown as string),
-      });
-    }
-    // Ensure we have the right number of slots
-    const out: Slot[] = [];
-    for (let i = 1; i <= matchCount; i++) {
-      const existingSlot = byOrder.get(i);
-      if (existingSlot) {
-        // Safely extract player_ids
-        const playerIds = existing
-          .find((p) => p.match_order === i)
-          ?.players.sort((a, b) => a.slot - b.slot)
-          .map((pp) => pp.player_id) ?? [];
-        out.push({ match_order: i, player_ids: playerIds });
-      } else {
-        out.push({ match_order: i, player_ids: [] });
-      }
-    }
-    return out;
-  });
-
-  // Currently selected player for placement
+  const [slots, setSlots] = useState<Slot[]>(() => buildInitialSlots(matchCount, existing));
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 
   const usedPlayerIds = useMemo(() => {
@@ -114,20 +102,15 @@ export function PairingsDrafter({
 
   function clickPlayer(playerId: string) {
     if (readOnly) return;
-    if (selectedPlayer === playerId) {
-      setSelectedPlayer(null);
-      return;
-    }
-    setSelectedPlayer(playerId);
+    setSelectedPlayer((prev) => (prev === playerId ? null : playerId));
   }
 
   function clickSlotAddHere(matchOrder: number) {
     if (readOnly || !selectedPlayer) return;
-
     setSlots((prev) =>
       prev.map((s) => {
         if (s.match_order !== matchOrder) return s;
-        if (s.player_ids.length >= size) return s; // full
+        if (s.player_ids.length >= size) return s;
         if (s.player_ids.includes(selectedPlayer)) return s;
         return { ...s, player_ids: [...s.player_ids, selectedPlayer] };
       })
@@ -138,13 +121,11 @@ export function PairingsDrafter({
   function removeFromSlot(matchOrder: number, playerId: string) {
     if (readOnly) return;
     setSlots((prev) =>
-      prev.map((s) => {
-        if (s.match_order !== matchOrder) return s;
-        return {
-          ...s,
-          player_ids: s.player_ids.filter((id) => id !== playerId),
-        };
-      })
+      prev.map((s) =>
+        s.match_order !== matchOrder
+          ? s
+          : { ...s, player_ids: s.player_ids.filter((id) => id !== playerId) }
+      )
     );
   }
 
@@ -156,7 +137,6 @@ export function PairingsDrafter({
     setSaveState("saving");
     setError(null);
 
-    // On submit, validate all slots full
     if (submit) {
       const incomplete = slots.some((s) => s.player_ids.length !== size);
       if (incomplete) {
@@ -196,7 +176,6 @@ export function PairingsDrafter({
 
   return (
     <div className="space-y-8">
-      {/* Status banner */}
       {readOnly && (
         <div className="bg-ink-950 border border-schloss rounded-sm p-5">
           <div className="text-eyebrow uppercase text-schloss-bright mb-1">
@@ -212,7 +191,6 @@ export function PairingsDrafter({
         </div>
       )}
 
-      {/* Roster */}
       <section>
         <div className="flex items-baseline justify-between mb-4">
           <div className="text-eyebrow uppercase text-schloss-bright">
@@ -256,14 +234,13 @@ export function PairingsDrafter({
         </div>
       </section>
 
-      {/* Match slots */}
       <section>
         <div className="flex items-baseline justify-between mb-4">
           <div className="text-eyebrow uppercase text-schloss-bright">
             Match order · {FORMAT_LABELS[format] ?? format}
           </div>
           <div className="text-xs text-ink-500">
-            Match {"1"} plays opposing team&apos;s match {"1"}, and so on.
+            Match 1 plays opposing team&apos;s match 1, and so on.
           </div>
         </div>
 
@@ -284,7 +261,6 @@ export function PairingsDrafter({
         </div>
       </section>
 
-      {/* Action bar */}
       {!readOnly && (
         <div className="sticky bottom-0 pt-6 pb-4 bg-gradient-to-t from-ink-950 via-ink-950 to-transparent -mx-6 md:-mx-10 px-6 md:px-10">
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-end">
@@ -312,7 +288,6 @@ export function PairingsDrafter({
         </div>
       )}
 
-      {/* Submit confirmation */}
       {confirmSubmit && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div
@@ -381,7 +356,6 @@ function SlotRow({
   return (
     <div className="bg-ink-950 border border-ink-800 rounded-sm">
       <div className="flex items-stretch">
-        {/* Match number */}
         <div
           className="flex items-center justify-center px-5 py-4 min-w-[60px] border-r border-ink-800"
           style={{ color: teamColour }}
@@ -391,7 +365,6 @@ function SlotRow({
           </div>
         </div>
 
-        {/* Assigned players */}
         <div className="flex-1 px-4 py-3 flex flex-wrap gap-2 items-center min-h-[60px]">
           {slot.player_ids.map((pid, idx) => {
             const p = playerById(pid);
@@ -427,7 +400,6 @@ function SlotRow({
           )}
         </div>
 
-        {/* Add-here button */}
         {!readOnly && !full && (
           <button
             onClick={onAddHere}
