@@ -26,38 +26,35 @@ export default async function MatchPage({
   const data = await getMatchDetail(id);
   if (!data) notFound();
 
-  const session = await getSession();
+  const authSession = await getSession();
   const canEdit =
-    session?.role === "player" ||
-    session?.role === "captain" ||
-    session?.role === "admin";
+    authSession?.role === "player" ||
+    authSession?.role === "captain" ||
+    authSession?.role === "admin";
 
-  const { tournament, session: sess, match, teamA, teamB, holes, evaluation, statusText, strokesPerPlayer, perHoleStrokes } = data;
+  const {
+    session: sess,
+    match,
+    teamA,
+    teamB,
+    holes,
+    holeScores,
+    evaluation,
+    statusText,
+    allowance,
+  } = data;
 
-  // Determine current hole = first unplayed, or 18 if all done, or 1 if nothing
-  const playedNumbers = new Set(
-    evaluation.outcomes
-      .filter(
-        (o) =>
-          o.result === "team_a" ||
-          o.result === "team_b" ||
-          o.result === "halved" ||
-          o.is_conceded
-      )
-      .filter((o) => o.team_a_net !== null || o.team_b_net !== null || o.is_conceded)
-      .map((o) => o.hole_number)
-  );
+  const playedHoleNumbers = new Set(holeScores.map((r) => r.hole_number));
+
+  // Current hole = first unplayed, null if all 18 played or match complete.
   let currentHole: number | null = null;
   for (let i = 1; i <= 18; i++) {
-    if (!playedNumbers.has(i)) {
+    if (!playedHoleNumbers.has(i)) {
       currentHole = i;
       break;
     }
   }
   if (evaluation.complete) currentHole = null;
-
-  // Team colour tints — for hole grid cell backgrounds.
-  const teamTint = (hex: string) => hexTint(hex, 0.12);
 
   return (
     <main className="min-h-screen bg-radial-schloss texture-noise">
@@ -83,7 +80,7 @@ export default async function MatchPage({
           teamB={teamB}
           statusText={statusText}
           complete={evaluation.complete}
-          strokesPerPlayer={strokesPerPlayer}
+          allowance={allowance}
         />
       </section>
 
@@ -106,15 +103,16 @@ export default async function MatchPage({
           matchId={match.id}
           holes={holes}
           outcomes={evaluation.outcomes}
+          playedHoleNumbers={playedHoleNumbers}
           teamA={{
             display_code: teamA.team_display_code,
             colour: teamA.team_colour,
-            tint: teamTint(teamA.team_colour),
+            tint: hexTint(teamA.team_colour, 0.12),
           }}
           teamB={{
             display_code: teamB.team_display_code,
             colour: teamB.team_colour,
-            tint: teamTint(teamB.team_colour),
+            tint: hexTint(teamB.team_colour, 0.12),
           }}
           currentHole={currentHole}
           canEdit={canEdit}
