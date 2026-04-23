@@ -7,6 +7,7 @@ type Props = {
   matchId: string;
   holes: Array<{ hole_number: number; par: number; stroke_index: number }>;
   outcomes: HoleOutcome[];
+  playedHoleNumbers: Set<number>; // which holes have actual hole_score rows
   teamA: { display_code: string; colour: string; tint: string };
   teamB: { display_code: string; colour: string; tint: string };
   currentHole: number | null;
@@ -17,6 +18,7 @@ export function HoleGrid({
   matchId,
   holes,
   outcomes,
+  playedHoleNumbers,
   teamA,
   teamB,
   currentHole,
@@ -30,26 +32,26 @@ export function HoleGrid({
     const outcome = outcomeForHole(holeNumber);
     const hole = holes.find((h) => h.hole_number === holeNumber);
     const isCurrent = currentHole === holeNumber;
-    const played = !!outcome && hasResult(outcome.result);
+    const played = playedHoleNumbers.has(holeNumber);
 
-    let bg = "bg-ink-950";
     let border = "border-ink-800";
     let letter = "";
     let letterColour = "";
+    let cellStyle: React.CSSProperties = {};
 
     if (played && outcome) {
       if (outcome.result === "team_a" || outcome.result === "conceded_to_a") {
-        bg = "";
         letter = outcome.is_conceded ? "—" : teamA.display_code;
         letterColour = teamA.colour;
+        cellStyle = { backgroundColor: teamA.tint };
       } else if (outcome.result === "team_b" || outcome.result === "conceded_to_b") {
-        bg = "";
         letter = outcome.is_conceded ? "—" : teamB.display_code;
         letterColour = teamB.colour;
+        cellStyle = { backgroundColor: teamB.tint };
       } else if (outcome.result === "halved") {
-        bg = "bg-ink-800";
         letter = "½";
         letterColour = "#B8C4BE";
+        cellStyle = { backgroundColor: "#1E2924" };
       }
     }
 
@@ -57,34 +59,23 @@ export function HoleGrid({
       border = "border-schloss-bright";
     }
 
-    const cellStyle: React.CSSProperties = played && outcome
-      ? outcome.result === "team_a" || outcome.result === "conceded_to_a"
-        ? { backgroundColor: teamA.tint }
-        : outcome.result === "team_b" || outcome.result === "conceded_to_b"
-          ? { backgroundColor: teamB.tint }
-          : {}
-      : {};
-
     const content = (
       <div
-        className={`relative aspect-square flex items-center justify-center rounded-sm border ${bg} ${border} ${
+        className={`relative aspect-square flex items-center justify-center rounded-sm border bg-ink-950 ${border} ${
           isCurrent ? "border-2 ring-1 ring-schloss-bright/30" : ""
         }`}
         style={cellStyle}
       >
-        {/* Hole number top-left */}
         <div className="absolute top-1 left-1 text-[10px] font-mono tabular text-ink-500 leading-none">
           {holeNumber}
         </div>
 
-        {/* Par top-right */}
         {hole && (
           <div className="absolute top-1 right-1 text-[9px] text-ink-600 leading-none">
             P{hole.par}
           </div>
         )}
 
-        {/* Centre content */}
         {played && letter ? (
           <div
             className="font-mono tabular text-xl md:text-2xl font-light"
@@ -100,7 +91,6 @@ export function HoleGrid({
       </div>
     );
 
-    // Played holes editable (tap to edit), unplayed non-current also tappable (enter directly)
     if (canEdit) {
       return (
         <Link
@@ -124,17 +114,5 @@ export function HoleGrid({
         {Array.from({ length: 9 }, (_, i) => renderCell(i + 10))}
       </div>
     </div>
-  );
-}
-
-function hasResult(
-  r: HoleOutcome["result"] | undefined
-): r is HoleOutcome["result"] {
-  return (
-    r === "team_a" ||
-    r === "team_b" ||
-    r === "halved" ||
-    r === "conceded_to_a" ||
-    r === "conceded_to_b"
   );
 }
