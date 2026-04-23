@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { TeamEntry, ExistingScore } from "@/lib/queries/holeEntry";
 
@@ -31,9 +31,7 @@ type BetterballScores = {
   team_b_p2_gross: string;
 };
 
-function extractExistingPairScores(
-  existing: ExistingScore | null
-): PairScores {
+function extractExistingPairScores(existing: ExistingScore | null): PairScores {
   if (!existing) return { team_a_gross: "", team_b_gross: "" };
   const s = existing.scores as {
     team_a?: { gross?: number | null };
@@ -45,9 +43,7 @@ function extractExistingPairScores(
   };
 }
 
-function extractExistingBetterball(
-  existing: ExistingScore | null
-): BetterballScores {
+function extractExistingBetterball(existing: ExistingScore | null): BetterballScores {
   if (!existing) {
     return {
       team_a_p1_gross: "",
@@ -68,9 +64,7 @@ function extractExistingBetterball(
   };
 }
 
-function extractConcededTo(
-  existing: ExistingScore | null
-): "team_a" | "team_b" | null {
+function extractConcededTo(existing: ExistingScore | null): "team_a" | "team_b" | null {
   if (!existing) return null;
   if (existing.result === "conceded_to_a") return "team_a";
   if (existing.result === "conceded_to_b") return "team_b";
@@ -98,16 +92,15 @@ export function HoleEntry({
   const [bbScores, setBbScores] = useState<BetterballScores>(() =>
     extractExistingBetterball(existingScore)
   );
-  const [concededTo, setConcededTo] = useState<"team_a" | "team_b" | null>(
-    () => extractConcededTo(existingScore)
+  // concededTo = the team that WON the hole via concession
+  const [concededTo, setConcededTo] = useState<"team_a" | "team_b" | null>(() =>
+    extractConcededTo(existingScore)
   );
-  const [confirmConcede, setConfirmConcede] = useState<"team_a" | "team_b" | null>(null);
+  const [confirmConcedeTo, setConfirmConcedeTo] = useState<"team_a" | "team_b" | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
-  // If an existing score exists but user edits (removes concession), we detect that by inspecting state only.
   useEffect(() => {
-    // Reset local state when hole changes via navigation link
     setPairScores(extractExistingPairScores(existingScore));
     setBbScores(extractExistingBetterball(existingScore));
     setConcededTo(extractConcededTo(existingScore));
@@ -150,23 +143,15 @@ export function HoleEntry({
       body.team_b_gross = parseScore(pairScores.team_b_gross);
     }
 
-    // Validation (non-conceded): need both sides to have a gross
     if (!concededTo) {
       if (isBetterball) {
-        // Need at least one gross per side
-        if (
-          body.team_a_p1_gross == null &&
-          body.team_a_p2_gross == null
-        ) {
-          setError("Enter at least one Team A score (or concede).");
+        if (body.team_a_p1_gross == null && body.team_a_p2_gross == null) {
+          setError(`Enter at least one ${teamA.team_name} score (or concede).`);
           setSaveState("error");
           return;
         }
-        if (
-          body.team_b_p1_gross == null &&
-          body.team_b_p2_gross == null
-        ) {
-          setError("Enter at least one Team B score (or concede).");
+        if (body.team_b_p1_gross == null && body.team_b_p2_gross == null) {
+          setError(`Enter at least one ${teamB.team_name} score (or concede).`);
           setSaveState("error");
           return;
         }
@@ -189,7 +174,6 @@ export function HoleEntry({
       if (!res.ok) throw new Error(data.error ?? "Save failed");
 
       setSaveState("saved");
-      // Navigate back to match or onward to next hole
       router.refresh();
       setTimeout(() => {
         if (nextHole) {
@@ -228,9 +212,12 @@ export function HoleEntry({
 
   const hasExisting = existingScore !== null;
 
+  // Helpers to get team info by side key
+  const teamBySide = (side: "team_a" | "team_b") => (side === "team_a" ? teamA : teamB);
+  const concededWinner = concededTo ? teamBySide(concededTo) : null;
+
   return (
     <div className="space-y-6">
-      {/* Team A */}
       <TeamSection
         team={teamA}
         side="team_a"
@@ -243,14 +230,12 @@ export function HoleEntry({
         par={par}
       />
 
-      {/* vs separator */}
       <div className="flex items-center gap-3 my-4">
         <div className="flex-1 h-px bg-ink-800" />
         <span className="text-eyebrow uppercase text-ink-500">vs</span>
         <div className="flex-1 h-px bg-ink-800" />
       </div>
 
-      {/* Team B */}
       <TeamSection
         team={teamB}
         side="team_b"
@@ -263,19 +248,22 @@ export function HoleEntry({
         par={par}
       />
 
-      {/* Concede buttons */}
       {concessionEnabled && (
         <div className="pt-4 border-t border-ink-800">
           <div className="text-eyebrow uppercase text-ink-500 mb-3">
             Concede hole
           </div>
-          {concededTo ? (
+          {concededWinner ? (
             <div className="bg-ink-900 border border-ink-700 rounded p-4 flex items-center justify-between">
               <div className="text-sm text-ink-200">
-                Hole conceded to{" "}
-                <span className="font-medium" style={{ color: concededTo === "team_a" ? teamA.team_colour : teamB.team_colour }}>
-                  {concededTo === "team_a" ? teamA.team_name : teamB.team_name}
-                </span>
+                Hole won by{" "}
+                <span
+                  className="font-medium"
+                  style={{ color: concededWinner.team_colour }}
+                >
+                  {concededWinner.team_name}
+                </span>{" "}
+                via concession
               </div>
               <button
                 onClick={() => setConcededTo(null)}
@@ -285,36 +273,37 @@ export function HoleEntry({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Button: awards hole to team A (team A wins) */}
               <button
-                onClick={() => setConfirmConcede("team_b")}
-                className="h-11 rounded border text-sm transition-colors"
+                onClick={() => setConfirmConcedeTo("team_a")}
+                className="h-11 rounded border text-sm transition-colors hover:opacity-80"
                 style={{
                   borderColor: teamA.team_colour,
                   color: teamA.team_colour,
                 }}
               >
-                Give hole to {teamA.team_name}
+                {teamB.team_name} concedes to {teamA.team_name}
               </button>
+              {/* Button: awards hole to team B (team B wins) */}
               <button
-                onClick={() => setConfirmConcede("team_a")}
-                className="h-11 rounded border text-sm transition-colors"
+                onClick={() => setConfirmConcedeTo("team_b")}
+                className="h-11 rounded border text-sm transition-colors hover:opacity-80"
                 style={{
                   borderColor: teamB.team_colour,
                   color: teamB.team_colour,
                 }}
               >
-                Give hole to {teamB.team_name}
+                {teamA.team_name} concedes to {teamB.team_name}
               </button>
             </div>
           )}
           <p className="text-xs text-ink-500 mt-2 leading-relaxed">
-            Scores remain editable after concession — leave blank to record a net double bogey.
+            Scores remain editable after concession — leave blank for a net double bogey default.
           </p>
         </div>
       )}
 
-      {/* Action bar */}
       <div className="sticky bottom-0 pt-4 pb-3 bg-gradient-to-t from-ink-950 via-ink-950 to-transparent -mx-6 md:-mx-10 px-6 md:px-10">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch">
           {error && (
@@ -347,12 +336,11 @@ export function HoleEntry({
         </div>
       </div>
 
-      {/* Confirmation modal for concede */}
-      {confirmConcede && (
+      {confirmConcedeTo && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/90"
-            onClick={() => setConfirmConcede(null)}
+            onClick={() => setConfirmConcedeTo(null)}
           />
           <div
             className="relative w-full max-w-sm rounded-lg overflow-hidden shadow-2xl border border-ink-700"
@@ -365,22 +353,24 @@ export function HoleEntry({
               </div>
               <h2 className="font-display text-2xl text-ink-100 mb-4">
                 Give hole {holeNumber} to{" "}
-                {confirmConcede === "team_a" ? teamA.team_name : teamB.team_name}?
+                <span style={{ color: teamBySide(confirmConcedeTo).team_colour }}>
+                  {teamBySide(confirmConcedeTo).team_name}
+                </span>?
               </h2>
               <p className="text-sm text-ink-300 mb-6 leading-relaxed">
-                The hole is awarded immediately. You can still enter gross scores below for stats — or leave blank for a net double bogey default.
+                The hole is awarded immediately. Scores can still be entered below for stats, or left blank for a net double bogey default.
               </p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => setConfirmConcede(null)}
+                  onClick={() => setConfirmConcedeTo(null)}
                   className="flex-1 h-11 rounded-md border border-ink-700 text-ink-200 hover:border-ink-500 transition-colors text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => {
-                    setConcededTo(confirmConcede);
-                    setConfirmConcede(null);
+                    setConcededTo(confirmConcedeTo);
+                    setConfirmConcedeTo(null);
                   }}
                   className="flex-1 h-11 rounded-md bg-schloss text-white hover:bg-schloss-bright transition-colors text-sm font-medium"
                 >
@@ -416,23 +406,19 @@ function TeamSection({
   concededTo: "team_a" | "team_b" | null;
   par: number;
 }) {
-  const receivingPair = team.pair_strokes_this_hole > 0;
+  // "Loser" of a concession = the team that did NOT win the hole
   const isConcededLoser = concededTo !== null && concededTo !== side;
-
-  // Players suggest par as placeholder
   const placeholder = String(par);
 
   if (isBetterball) {
     return (
       <div>
         <div className="flex items-baseline justify-between mb-3">
-          <div className="flex items-baseline gap-2">
-            <div
-              className="text-eyebrow uppercase"
-              style={{ color: team.team_colour }}
-            >
-              {team.team_display_code} · {team.team_name}
-            </div>
+          <div
+            className="text-eyebrow uppercase"
+            style={{ color: team.team_colour }}
+          >
+            {team.team_display_code} · {team.team_name}
           </div>
           {isConcededLoser && (
             <div className="text-xs text-ink-500 italic">Conceded · optional</div>
@@ -470,7 +456,6 @@ function TeamSection({
     );
   }
 
-  // Pair / singles: one score box
   const isSingles = team.players.length === 1;
   const names = team.players.map((p) => p.display_name).join(" & ");
   const fieldKey: keyof PairScores = side === "team_a" ? "team_a_gross" : "team_b_gross";
@@ -491,9 +476,9 @@ function TeamSection({
 
       <PlayerRow
         name={names}
-        handicap={isSingles ? team.players[0]?.handicap ?? null : null}
+        handicap={isSingles ? (team.players[0]?.handicap ?? null) : null}
         strokes={team.pair_strokes_this_hole}
-        receiving={receivingPair}
+        receiving={team.pair_strokes_this_hole > 0}
         placeholder={placeholder}
         value={pairScores[fieldKey]}
         onChange={(v) => setPairScores({ ...pairScores, [fieldKey]: v })}
@@ -526,14 +511,8 @@ function PlayerRow({
   teamTint: string;
 }) {
   const bgStyle = receiving
-    ? {
-        backgroundColor: "#3A2A10",
-        borderColor: "#BA7517",
-      }
-    : {
-        backgroundColor: teamTint,
-        borderColor: teamColour,
-      };
+    ? { backgroundColor: "#3A2A10", borderColor: "#BA7517" }
+    : { backgroundColor: teamTint, borderColor: teamColour };
 
   return (
     <div
