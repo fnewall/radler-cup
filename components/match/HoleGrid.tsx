@@ -7,9 +7,9 @@ type Props = {
   matchId: string;
   holes: Array<{ hole_number: number; par: number; stroke_index: number }>;
   outcomes: HoleOutcome[];
-  playedHoleNumbers: Set<number>; // which holes have actual hole_score rows
-  teamA: { display_code: string; colour: string; tint: string };
-  teamB: { display_code: string; colour: string; tint: string };
+  playedHoleNumbers: Set<number>;
+  teamA: { display_code: string; colour: string };
+  teamB: { display_code: string; colour: string };
   currentHole: number | null;
   canEdit: boolean;
 };
@@ -24,70 +24,93 @@ export function HoleGrid({
   currentHole,
   canEdit,
 }: Props) {
-  function outcomeForHole(n: number): HoleOutcome | undefined {
-    return outcomes.find((o) => o.hole_number === n);
+  // Pre-compute the running match state at each played hole.
+  // delta > 0 = team A up by |delta|, delta < 0 = team B up.
+  const runningState: Record<number, { delta: number }> = {};
+  let delta = 0;
+  for (let i = 1; i <= 18; i++) {
+    const outcome = outcomes.find((o) => o.hole_number === i);
+    if (!outcome || !playedHoleNumbers.has(i)) continue;
+    if (outcome.result === "team_a" || outcome.result === "conceded_to_a") {
+      delta += 1;
+    } else if (outcome.result === "team_b" || outcome.result === "conceded_to_b") {
+      delta -= 1;
+    }
+    runningState[i] = { delta };
   }
 
   function renderCell(holeNumber: number) {
-    const outcome = outcomeForHole(holeNumber);
     const hole = holes.find((h) => h.hole_number === holeNumber);
     const isCurrent = currentHole === holeNumber;
     const played = playedHoleNumbers.has(holeNumber);
+    const state = runningState[holeNumber];
 
-    let border = "border-ink-800";
-    let letter = "";
-    let letterColour = "";
-    let cellStyle: React.CSSProperties = {};
+    // Cell appearance
+    let fillStyle: React.CSSProperties = { backgroundColor: "#0F1512" };
+    let centreContent: React.ReactNode = null;
+    let holeNumberColour = "text-ink-500";
+    let parColour = "text-ink-600";
+    let borderClass = "border-ink-800";
 
-    if (played && outcome) {
-      if (outcome.result === "team_a" || outcome.result === "conceded_to_a") {
-        letter = outcome.is_conceded ? "—" : teamA.display_code;
-        letterColour = teamA.colour;
-        cellStyle = { backgroundColor: teamA.tint };
-      } else if (outcome.result === "team_b" || outcome.result === "conceded_to_b") {
-        letter = outcome.is_conceded ? "—" : teamB.display_code;
-        letterColour = teamB.colour;
-        cellStyle = { backgroundColor: teamB.tint };
-      } else if (outcome.result === "halved") {
-        letter = "½";
-        letterColour = "#B8C4BE";
-        cellStyle = { backgroundColor: "#1E2924" };
+    if (played && state) {
+      if (state.delta === 0) {
+        // All square — dark grey block, "AS" label
+        fillStyle = { backgroundColor: "#2A3831" };
+        centreContent = (
+          <div className="font-mono tabular text-sm md:text-base font-medium text-ink-200">
+            AS
+          </div>
+        );
+      } else if (state.delta > 0) {
+        // Team A leading at this point
+        fillStyle = { backgroundColor: teamA.colour };
+        holeNumberColour = "text-white/60";
+        parColour = "text-white/40";
+        centreContent = (
+          <div className="font-mono tabular text-sm md:text-base font-semibold text-white leading-none">
+            {state.delta}↑
+          </div>
+        );
+      } else {
+        // Team B leading
+        fillStyle = { backgroundColor: teamB.colour };
+        holeNumberColour = "text-white/60";
+        parColour = "text-white/40";
+        centreContent = (
+          <div className="font-mono tabular text-sm md:text-base font-semibold text-white leading-none">
+            {Math.abs(state.delta)}↑
+          </div>
+        );
       }
     }
 
     if (isCurrent) {
-      border = "border-schloss-bright";
+      borderClass = "border-schloss-bright border-2";
+      if (!centreContent) {
+        centreContent = (
+          <div className="text-[9px] uppercase tracking-widest text-schloss-bright">
+            now
+          </div>
+        );
+      }
     }
 
     const content = (
       <div
-        className={`relative aspect-square flex items-center justify-center rounded-sm border bg-ink-950 ${border} ${
-          isCurrent ? "border-2 ring-1 ring-schloss-bright/30" : ""
-        }`}
-        style={cellStyle}
+        className={`relative aspect-square flex items-center justify-center rounded-sm border ${borderClass}`}
+        style={fillStyle}
       >
-        <div className="absolute top-1 left-1 text-[10px] font-mono tabular text-ink-500 leading-none">
+        <div
+          className={`absolute top-1 left-1 text-[10px] font-mono tabular leading-none ${holeNumberColour}`}
+        >
           {holeNumber}
         </div>
-
         {hole && (
-          <div className="absolute top-1 right-1 text-[9px] text-ink-600 leading-none">
+          <div className={`absolute top-1 right-1 text-[9px] leading-none ${parColour}`}>
             P{hole.par}
           </div>
         )}
-
-        {played && letter ? (
-          <div
-            className="font-mono tabular text-xl md:text-2xl font-light"
-            style={{ color: letterColour }}
-          >
-            {letter}
-          </div>
-        ) : isCurrent ? (
-          <div className="text-[9px] uppercase tracking-widest text-schloss-bright">
-            now
-          </div>
-        ) : null}
+        {centreContent}
       </div>
     );
 
