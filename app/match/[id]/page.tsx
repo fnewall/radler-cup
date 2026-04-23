@@ -46,7 +46,6 @@ export default async function MatchPage({
 
   const playedHoleNumbers = new Set(holeScores.map((r) => r.hole_number));
 
-  // Current hole = first unplayed, null if all 18 played or match complete.
   let currentHole: number | null = null;
   for (let i = 1; i <= 18; i++) {
     if (!playedHoleNumbers.has(i)) {
@@ -107,12 +106,10 @@ export default async function MatchPage({
           teamA={{
             display_code: teamA.team_display_code,
             colour: teamA.team_colour,
-            tint: hexTint(teamA.team_colour, 0.12),
           }}
           teamB={{
             display_code: teamB.team_display_code,
             colour: teamB.team_colour,
-            tint: hexTint(teamB.team_colour, 0.12),
           }}
           currentHole={currentHole}
           canEdit={canEdit}
@@ -143,13 +140,4 @@ export default async function MatchPage({
       </section>
     </main>
   );
-}
-
-function hexTint(hex: string, alpha: number): string {
-  const clean = hex.replace("#", "");
-  if (clean.length !== 6) return hex;
-  const r = parseInt(clean.slice(0, 2), 16);
-  const g = parseInt(clean.slice(2, 4), 16);
-  const b = parseInt(clean.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
