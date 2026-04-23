@@ -2,9 +2,11 @@ import Link from "next/link";
 import { Countdown } from "@/components/Countdown";
 import { TeamCrest } from "@/components/TeamCrest";
 import { GearButton } from "@/components/GearButton";
+import { LiveTournamentRefresher } from "@/components/realtime/LiveTournamentRefresher";
 import { getLandingData } from "@/lib/queries/landing";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 const FALLBACK_START = "2026-06-01T09:00:00+02:00";
 
@@ -31,6 +33,37 @@ function sessionTimeLabel(s: {
   return s.session_number % 2 === 1 ? "Morning" : "Afternoon";
 }
 
+async function getTournamentTotals(
+  tournamentId: string,
+  teamAId: string,
+  teamBId: string
+): Promise<{ pointsA: number; pointsB: number; matchesStarted: boolean }> {
+  const supabase = createAdminClient();
+  const { data: matches } = await supabase
+    .from("match")
+    .select("points_team_a, points_team_b, status, session_id, session:session_id(tournament_id)")
+    .not("status", "eq", "pending");
+
+  const relevant = (matches ?? []).filter(
+    (m) =>
+      (m as unknown as { session: { tournament_id: string } | null }).session
+        ?.tournament_id === tournamentId
+  );
+
+  let pointsA = 0;
+  let pointsB = 0;
+  for (const m of relevant) {
+    pointsA += Number(m.points_team_a) || 0;
+    pointsB += Number(m.points_team_b) || 0;
+  }
+
+  return {
+    pointsA,
+    pointsB,
+    matchesStarted: relevant.length > 0,
+  };
+}
+
 export default async function Home() {
   const data = await getLandingData();
 
@@ -50,6 +83,8 @@ export default async function Home() {
   const { tournament, teams, sessions } = data;
   const [teamA, teamB] = teams;
 
+  const totals = await getTournamentTotals(tournament.id, teamA.id, teamB.id);
+
   const countdownTarget =
     sessions[0]?.start_at ?? tournament.start_date ?? FALLBACK_START;
 
@@ -60,6 +95,8 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-radial-schloss texture-noise relative overflow-hidden">
+      <LiveTournamentRefresher />
+
       <header className="relative z-10 flex items-center justify-between px-6 md:px-10 py-6">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-schloss-bright animate-pulse-live" />
@@ -70,7 +107,7 @@ export default async function Home() {
         <GearButton />
       </header>
 
-      <section className="relative z-10 px-6 md:px-10 pt-12 md:pt-24 pb-20 max-w-7xl mx-auto">
+      <section className="relative z-10 px-6 md:px-10 pt-12 md:pt-24 pb-12 max-w-7xl mx-auto">
         <div className="text-center">
           <div className="text-eyebrow uppercase text-schloss-bright mb-6">
             Golf Club Schloss Ernegg · Austria
@@ -83,9 +120,74 @@ export default async function Home() {
           </p>
         </div>
 
-        <div className="mt-16 md:mt-24 flex justify-center">
-          <Countdown target={countdownTarget} />
-        </div>
+        {/* Show big live score if matches have started, otherwise show countdown */}
+        {totals.matchesStarted ? (
+          <div className="mt-12 md:mt-16 max-w-4xl mx-auto">
+            <div className="bg-ink-950/80 backdrop-blur border border-ink-800 rounded-sm overflow-hidden">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-stretch">
+                <div
+                  className="py-8 md:py-12 px-6 md:px-8 flex items-center justify-end gap-4"
+                  style={{
+                    backgroundColor: hexTint(teamA.colour_primary ?? "#3B8BE8", 0.1),
+                  }}
+                >
+                  <div className="text-right">
+                    <div
+                      className="text-eyebrow uppercase mb-2"
+                      style={{ color: teamA.colour_primary }}
+                    >
+                      {teamA.name}
+                    </div>
+                    <div
+                      className="font-mono tabular text-6xl md:text-7xl font-light leading-none"
+                      style={{ color: teamA.colour_primary }}
+                    >
+                      {formatPoints(totals.pointsA)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center px-4 md:px-6 bg-ink-900 border-x border-ink-800">
+                  <div className="text-center">
+                    <div className="w-2 h-2 rounded-full bg-schloss-bright animate-pulse-live mx-auto mb-2" />
+                    <div className="text-eyebrow uppercase text-schloss-bright">
+                      Live
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className="py-8 md:py-12 px-6 md:px-8 flex items-center justify-start gap-4"
+                  style={{
+                    backgroundColor: hexTint(teamB.colour_primary ?? "#E24B4A", 0.1),
+                  }}
+                >
+                  <div className="text-left">
+                    <div
+                      className="text-eyebrow uppercase mb-2"
+                      style={{ color: teamB.colour_primary }}
+                    >
+                      {teamB.name}
+                    </div>
+                    <div
+                      className="font-mono tabular text-6xl md:text-7xl font-light leading-none"
+                      style={{ color: teamB.colour_primary }}
+                    >
+                      {formatPoints(totals.pointsB)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-ink-900 border-t border-ink-800 px-6 py-2 text-center text-xs text-ink-500 font-mono tabular">
+                {formatPoints(totals.pointsA + totals.pointsB)} of {totalPoints} points awarded · {formatPoints(tournament.points_to_win)} to win
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-16 md:mt-24 flex justify-center">
+            <Countdown target={countdownTarget} />
+          </div>
+        )}
       </section>
 
       <div className="relative z-10 hairline max-w-5xl mx-auto" />
@@ -210,6 +312,20 @@ export default async function Home() {
   );
 }
 
+function formatPoints(n: number): string {
+  if (n === Math.floor(n)) return `${n}`;
+  return n.toFixed(1);
+}
+
+function hexTint(hex: string, alpha: number): string {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function SessionStatusDot({
   session,
 }: {
@@ -224,18 +340,14 @@ function SessionStatusDot({
     );
   }
   if (session.status === "complete") {
-    return (
-      <span className="text-eyebrow uppercase text-ink-500">Final</span>
-    );
+    return <span className="text-eyebrow uppercase text-ink-500">Final</span>;
   }
   if (session.pairings_revealed) {
     return (
       <span className="text-eyebrow uppercase text-schloss-bright">Revealed</span>
     );
   }
-  return (
-    <span className="text-eyebrow uppercase text-ink-600">Upcoming</span>
-  );
+  return <span className="text-eyebrow uppercase text-ink-600">Upcoming</span>;
 }
 
 function SessionLinkLabel({
