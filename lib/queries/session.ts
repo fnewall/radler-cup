@@ -1,0 +1,204 @@
+import { createClient } from "@/lib/supabase/server";
+
+export type SessionDetail = {
+  tournament: {
+    id: string;
+    name: string;
+  };
+  session: {
+    id: string;
+    session_number: number;
+    label: string;
+    day_number: number;
+    format: string;
+    match_count: number;
+    start_at: string | null;
+    pairings_revealed: boolean;
+    status: "upcoming" | "in_progress" | "complete";
+    tees_used: string | null;
+  };
+  teams: Array<{
+    id: string;
+    name: string;
+    display_code: string;
+    display_order: number | null;
+    colour_primary: string;
+  }>;
+  submissionStatus: {
+    team_a_submitted: boolean;
+    team_b_submitted: boolean;
+    team_a_id: string | null;
+    team_b_id: string | null;
+  };
+  matches: Array<{
+    id: string;
+    match_order: number;
+    status: string;
+    winning_team_id: string | null;
+    points_team_a: number;
+    points_team_b: number;
+    ended_on_hole: number | null;
+    team_a: MatchSide;
+    team_b: MatchSide;
+  }>;
+};
+
+type MatchSide = {
+  team_id: string;
+  team_name: string;
+  team_display_code: string;
+  team_colour: string;
+  players: Array<{ id: string; display_name: string; handicap: number | null; slot: number }>;
+};
+
+export async function getSessionDetail(
+  sessionId: string
+): Promise<SessionDetail | null> {
+  const supabase = await createClient();
+
+  const { data: session } = await supabase
+    .from("session")
+    .select("id, session_number, label, day_number, format, match_count, start_at, pairings_revealed, status, tees_used, tournament_id")
+    .eq("id", sessionId)
+    .single();
+
+  if (!session) return null;
+
+  const { data: tournament } = await supabase
+    .from("tournament")
+    .select("id, name")
+    .eq("id", session.tournament_id)
+    .single();
+
+  if (!tournament) return null;
+
+  const { data: teams } = await supabase
+    .from("team")
+    .select("id, name, display_code, display_order, colour_primary")
+    .eq("tournament_id", tournament.id)
+    .order("display_order", { ascending: true, nullsFirst: false });
+
+  const teamsArr = teams ?? [];
+  const teamAId = teamsArr[0]?.id ?? null;
+  const teamBId = teamsArr[1]?.id ?? null;
+
+  // Submission status (always useful, even before reveal)
+  const { data: pairings } = await supabase
+    .from("pairing")
+    .select("id, team_id, match_order, submitted_at")
+    .eq("session_id", sessionId);
+
+  const pairingsArr = pairings ?? [];
+
+  function allSubmittedFor(teamId: string | null): boolean {
+    if (!teamId) return false;
+    const forTeam = pairingsArr.filter((p) => p.team_id === teamId);
+    if (forTeam.length === 0) return false;
+    return forTeam.every((p) => p.submitted_at !== null);
+  }
+
+  const submissionStatus = {
+    team_a_submitted: allSubmittedFor(teamAId),
+    team_b_submitted: allSubmittedFor(teamBId),
+    team_a_id: teamAId,
+    team_b_id: teamBId,
+  };
+
+  let matches: SessionDetail["matches"] = [];
+
+  // Only fetch and shape matches if pairings are revealed
+  if (session.pairings_revealed && teamAId && teamBId) {
+    const { data: matchRows } = await supabase
+      .from("match")
+      .select("id, match_order, status, winning_team_id, points_team_a, points_team_b, ended_on_hole, team_a_pairing_id, team_b_pairing_id")
+      .eq("session_id", sessionId)
+      .order("match_order", { ascending: true });
+
+    const matchArr = matchRows ?? [];
+    const allPairingIds = matchArr.flatMap((m) => [
+      m.team_a_pairing_id,
+      m.team_b_pairing_id,
+    ]);
+
+    const { data: pairingPlayers } = allPairingIds.length
+      ? await supabase
+          .from("pairing_player")
+          .select("pairing_id, player_id, slot")
+          .in("pairing_id", allPairingIds)
+      : { data: [] };
+
+    const playerIds = Array.from(
+      new Set((pairingPlayers ?? []).map((pp) => pp.player_id))
+    );
+
+    const { data: players } = playerIds.length
+      ? await supabase
+          .from("player")
+          .select("id, display_name, handicap, team_id")
+          .in("id", playerIds)
+      : { data: [] };
+
+    const playerMap = new Map(
+      (players ?? []).map((p) => [p.id, p])
+    );
+    const teamA = teamsArr[0];
+    const teamB = teamsArr[1];
+
+    matches = matchArr.map((m) => {
+      const makeSide = (
+        pairingId: string,
+        team: typeof teamA
+      ): MatchSide => {
+        const slots = (pairingPlayers ?? [])
+          .filter((pp) => pp.pairing_id === pairingId)
+          .sort((a, b) => a.slot - b.slot);
+        return {
+          team_id: team.id,
+          team_name: team.name,
+          team_display_code: team.display_code,
+          team_colour: team.colour_primary,
+          players: slots.map((s) => {
+            const p = playerMap.get(s.player_id);
+            return {
+              id: s.player_id,
+              display_name: p?.display_name ?? "?",
+              handicap: p?.handicap ?? null,
+              slot: s.slot,
+            };
+          }),
+        };
+      };
+
+      return {
+        id: m.id,
+        match_order: m.match_order,
+        status: m.status,
+        winning_team_id: m.winning_team_id,
+        points_team_a: Number(m.points_team_a),
+        points_team_b: Number(m.points_team_b),
+        ended_on_hole: m.ended_on_hole,
+        team_a: makeSide(m.team_a_pairing_id, teamA),
+        team_b: makeSide(m.team_b_pairing_id, teamB),
+      };
+    });
+  }
+
+  return {
+    tournament: { id: tournament.id, name: tournament.name },
+    session: {
+      id: session.id,
+      session_number: session.session_number,
+      label: session.label,
+      day_number: session.day_number,
+      format: session.format,
+      match_count: session.match_count,
+      start_at: session.start_at,
+      pairings_revealed: session.pairings_revealed,
+      status: session.status as "upcoming" | "in_progress" | "complete",
+      tees_used: session.tees_used,
+    },
+    teams: teamsArr,
+    submissionStatus,
+    matches,
+  };
+}
