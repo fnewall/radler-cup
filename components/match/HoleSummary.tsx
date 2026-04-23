@@ -7,9 +7,6 @@ type Props = {
 };
 
 export function HoleSummary({ outcomes, teamA, teamB }: Props) {
-  const played = outcomes.filter((o) => o.result !== "halved" || o.team_a_net !== null || o.team_b_net !== null);
-  // Actually — we only want to include holes that were *scored* (played).
-  // Halved holes with null nets mean untouched.
   const scored = outcomes.filter(
     (o) =>
       o.team_a_net !== null ||
@@ -25,9 +22,12 @@ export function HoleSummary({ outcomes, teamA, teamB }: Props) {
     );
   }
 
+  // Running match status (team_a positive = team_a up)
+  let delta = 0;
+
   return (
     <div className="bg-ink-950 border border-ink-800 rounded-sm overflow-hidden">
-      <div className="grid grid-cols-[auto_auto_1fr_1fr_auto] px-4 py-3 text-eyebrow uppercase text-ink-500 border-b border-ink-800 gap-3">
+      <div className="grid grid-cols-[auto_auto_1fr_1fr_auto_auto] px-4 py-3 text-eyebrow uppercase text-ink-500 border-b border-ink-800 gap-3">
         <div>Hole</div>
         <div>Par</div>
         <div className="text-right" style={{ color: teamA.colour }}>
@@ -37,10 +37,19 @@ export function HoleSummary({ outcomes, teamA, teamB }: Props) {
           {teamB.display_code}
         </div>
         <div className="text-right">Hole</div>
+        <div className="text-right min-w-[52px]">Status</div>
       </div>
 
       <div className="divide-y divide-ink-800">
         {scored.map((o) => {
+          // Update running delta for this hole
+          if (o.result === "team_a" || o.result === "conceded_to_a") {
+            delta += 1;
+          } else if (o.result === "team_b" || o.result === "conceded_to_b") {
+            delta -= 1;
+          }
+          // halved: no change
+
           let resultCell: React.ReactNode;
           if (o.result === "team_a" || o.result === "conceded_to_a") {
             resultCell = (
@@ -66,10 +75,36 @@ export function HoleSummary({ outcomes, teamA, teamB }: Props) {
             resultCell = <span className="font-mono tabular text-ink-300">½</span>;
           }
 
+          // Status cell
+          let statusCell: React.ReactNode;
+          if (delta === 0) {
+            statusCell = (
+              <span className="font-mono tabular text-ink-400 text-sm">AS</span>
+            );
+          } else if (delta > 0) {
+            statusCell = (
+              <span
+                className="font-mono tabular text-sm"
+                style={{ color: teamA.colour }}
+              >
+                {delta} UP
+              </span>
+            );
+          } else {
+            statusCell = (
+              <span
+                className="font-mono tabular text-sm"
+                style={{ color: teamB.colour }}
+              >
+                {Math.abs(delta)} UP
+              </span>
+            );
+          }
+
           return (
             <div
               key={o.hole_number}
-              className="grid grid-cols-[auto_auto_1fr_1fr_auto] px-4 py-2 gap-3 items-baseline text-sm"
+              className="grid grid-cols-[auto_auto_1fr_1fr_auto_auto] px-4 py-2 gap-3 items-baseline text-sm"
             >
               <div className="font-mono tabular text-ink-400 w-6">
                 {o.hole_number}
@@ -82,6 +117,7 @@ export function HoleSummary({ outcomes, teamA, teamB }: Props) {
                 {o.team_b_net !== null ? o.team_b_net : o.is_conceded ? "—" : ""}
               </div>
               <div className="text-right min-w-[40px]">{resultCell}</div>
+              <div className="text-right min-w-[52px]">{statusCell}</div>
             </div>
           );
         })}
