@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { computePlayerStrokes, type Allowance } from "@/lib/scoring/allowance";
+import {
+  computeAllowance,
+  type Allowance,
+  type ComputedAllowance,
+} from "@/lib/scoring/allowance";
 import { strokesPerHole, type Hole } from "@/lib/scoring/strokes";
 import {
   evaluateMatch,
@@ -41,7 +45,7 @@ export type MatchDetail = {
   holeScores: HoleScoreRow[];
   evaluation: MatchEvaluation;
   statusText: string;
-  strokesPerPlayer: Record<string, number>;
+  allowance: ComputedAllowance;
   perHoleStrokes: Record<string, Record<number, number>>;
 };
 
@@ -182,17 +186,17 @@ export async function getMatchDetail(
     result: r.result as HoleScoreRow["result"],
   }));
 
-  const allowance = (session.handicap_allowance as Allowance) ?? null;
-  const effective = computePlayerStrokes(
-    allowance,
+  const allowanceConfig = (session.handicap_allowance as Allowance) ?? null;
+  const allowance = computeAllowance(
+    allowanceConfig,
     teamASide.players.map((p) => ({ player_id: p.id, handicap: p.handicap })),
     teamBSide.players.map((p) => ({ player_id: p.id, handicap: p.handicap }))
   );
 
   const perHoleStrokes: Record<string, Record<number, number>> = {};
-  for (const pid of Object.keys(effective)) {
+  for (const pid of Object.keys(allowance.strokesByPlayer)) {
     perHoleStrokes[pid] = strokesPerHole(
-      effective[pid],
+      allowance.strokesByPlayer[pid],
       holes,
       tournament.max_strokes_per_hole
     );
@@ -224,7 +228,7 @@ export async function getMatchDetail(
       format: session.format as MatchDetail["session"]["format"],
       match_count: session.match_count,
       points_per_match: Number(session.points_per_match),
-      handicap_allowance: allowance,
+      handicap_allowance: allowanceConfig,
       tees_used: session.tees_used,
     },
     match: {
@@ -242,7 +246,7 @@ export async function getMatchDetail(
     holeScores,
     evaluation,
     statusText,
-    strokesPerPlayer: effective,
+    allowance,
     perHoleStrokes,
   };
 }
