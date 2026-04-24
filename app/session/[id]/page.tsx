@@ -372,4 +372,118 @@ function MatchRow({ match }: { match: MatchItem }) {
     centreContent = (
       <div className="text-center">
         <div
-          className="text-eyebro
+          className="text-eyebrow uppercase"
+          style={{ color: bColour }}
+        >
+          Wins {ls.by}
+        </div>
+        <div className="text-[10px] text-ink-500 font-mono tabular mt-0.5">
+          Final
+        </div>
+      </div>
+    );
+  } else if (ls.state === "conceded_to_a") {
+    aFill = { backgroundColor: aColour };
+    aTextColour = "#FFFFFF";
+    centreContent = (
+      <div className="text-center">
+        <div className="text-eyebrow uppercase" style={{ color: aColour }}>
+          Conceded
+        </div>
+        <div className="text-[10px] text-ink-500 font-mono tabular mt-0.5">
+          Final
+        </div>
+      </div>
+    );
+  } else if (ls.state === "conceded_to_b") {
+    bFill = { backgroundColor: bColour };
+    bTextColour = "#FFFFFF";
+    centreContent = (
+      <div className="text-center">
+        <div className="text-eyebrow uppercase" style={{ color: bColour }}>
+          Conceded
+        </div>
+        <div className="text-[10px] text-ink-500 font-mono tabular mt-0.5">
+          Final
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      href={`/match/${match.id}`}
+      className="block bg-ink-950 border border-ink-800 rounded-sm hover:border-ink-700 transition-colors overflow-hidden"
+    >
+      <div className="grid grid-cols-[56px_1fr_auto_1fr] items-stretch min-h-[76px]">
+        <div className="flex items-center justify-center py-4 border-r border-ink-800 font-mono tabular text-xl font-light text-schloss-bright">
+          {String(match.match_order).padStart(2, "0")}
+        </div>
+
+        <MatchSide
+          side={match.team_a}
+          align="right"
+          fill={aFill}
+          textColour={aTextColour}
+        />
+
+        <div className="flex items-center justify-center px-4 min-w-[100px] border-x border-ink-800 bg-ink-900">
+          {centreContent}
+        </div>
+
+        <MatchSide
+          side={match.team_b}
+          align="left"
+          fill={bFill}
+          textColour={bTextColour}
+        />
+      </div>
+    </Link>
+  );
+}
+
+function MatchSide({
+  side,
+  align,
+  fill,
+  textColour,
+}: {
+  side: MatchSideData;
+  align: "left" | "right";
+  fill: React.CSSProperties;
+  textColour: string;
+}) {
+  return (
+    <div
+      className={`py-3 px-4 flex flex-col justify-center transition-colors ${
+        align === "right" ? "items-end text-right" : "items-start text-left"
+      }`}
+      style={fill}
+    >
+      <div
+        className="text-[10px] uppercase tracking-widest font-medium mb-1 opacity-80"
+        style={{ color: textColour }}
+      >
+        {side.team_display_code}
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {side.players.map((p) => (
+          <div
+            key={p.slot}
+            className={`text-sm leading-tight flex items-baseline gap-2 ${
+              align === "right" ? "flex-row-reverse" : ""
+            }`}
+            style={{ color: textColour }}
+          >
+            <span className="font-medium">{p.display_name}</span>
+            {p.handicap !== null && (
+              <span className="font-mono tabular text-xs opacity-60">
+                {p.handicap}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
