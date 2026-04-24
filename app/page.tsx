@@ -5,6 +5,7 @@ import { GearButton } from "@/components/GearButton";
 import { LiveTournamentRefresher } from "@/components/realtime/LiveTournamentRefresher";
 import { getLandingData } from "@/lib/queries/landing";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { evaluateMatch, type HoleScoreRow } from "@/lib/scoring/evaluate";
 
 export const dynamic = "force-dynamic";
 
@@ -33,35 +34,139 @@ function sessionTimeLabel(s: {
   return s.session_number % 2 === 1 ? "Morning" : "Afternoon";
 }
 
-async function getTournamentTotals(
-  tournamentId: string,
-  teamAId: string,
-  teamBId: string
-): Promise<{ pointsA: number; pointsB: number; matchesStarted: boolean }> {
+async function getTournamentTotals(tournamentId: string): Promise<{
+  pointsA: number;
+  pointsB: number;
+  matchesStarted: boolean;
+}> {
   const supabase = createAdminClient();
+
+  const { data: sessions } = await supabase
+    .from("session")
+    .select("id, points_per_match")
+    .eq("tournament_id", tournamentId);
+
+  if (!sessions || sessions.length === 0) {
+    return { pointsA: 0, pointsB: 0, matchesStarted: false };
+  }
+
+  const sessionIds = sessions.map((s) => s.id);
+  const pointsBySession = new Map(
+    sessions.map((s) => [s.id, Number(s.points_per_match)])
+  );
+
+  const { data: teams } = await supabase
+    .from("team")
+    .select("id, display_order")
+    .eq("tournament_id", tournamentId)
+    .order("display_order", { ascending: true, nullsFirst: false });
+
+  if (!teams || teams.length < 2) {
+    return { pointsA: 0, pointsB: 0, matchesStarted: false };
+  }
+
+  const teamAId = teams[0].id;
+
+  const { data: tournament } = await supabase
+    .from("tournament")
+    .select("end_match_early")
+    .eq("id", tournamentId)
+    .single();
+
+  const endMatchEarly = tournament?.end_match_early ?? true;
+
+  const { data: course } = await supabase
+    .from("course")
+    .select("id")
+    .eq("tournament_id", tournamentId)
+    .limit(1)
+    .single();
+
+  const { data: holeRows } = course
+    ? await supabase
+        .from("hole")
+        .select("hole_number, par, stroke_index")
+        .eq("course_id", course.id)
+        .order("hole_number", { ascending: true })
+    : { data: [] };
+
+  const holes = (holeRows ?? []).map((h) => ({
+    hole_number: h.hole_number,
+    par: h.par,
+    stroke_index: h.stroke_index,
+  }));
+
   const { data: matches } = await supabase
     .from("match")
-    .select("points_team_a, points_team_b, status, session_id, session:session_id(tournament_id)")
-    .not("status", "eq", "pending");
+    .select("id, session_id, status, winning_team_id, team_a_pairing_id")
+    .in("session_id", sessionIds);
 
-  const relevant = (matches ?? []).filter(
-    (m) =>
-      (m as unknown as { session: { tournament_id: string } | null }).session
-        ?.tournament_id === tournamentId
-  );
+  if (!matches || matches.length === 0) {
+    return { pointsA: 0, pointsB: 0, matchesStarted: false };
+  }
+
+  const matchIds = matches.map((m) => m.id);
+
+  const { data: allScores } = await supabase
+    .from("hole_score")
+    .select("match_id, hole_number, scores, result")
+    .in("match_id", matchIds);
 
   let pointsA = 0;
   let pointsB = 0;
-  for (const m of relevant) {
-    pointsA += Number(m.points_team_a) || 0;
-    pointsB += Number(m.points_team_b) || 0;
+  let matchesStarted = false;
+
+  for (const m of matches) {
+    const scoreRows: HoleScoreRow[] = (allScores ?? [])
+      .filter((r) => r.match_id === m.id)
+      .map((r) => ({
+        hole_number: r.hole_number,
+        scores: r.scores as Record<string, unknown>,
+        result: r.result as HoleScoreRow["result"],
+      }));
+
+    // Determine "team A" relative to match: we need the pairing's team.
+    // Simpler: use winning_team_id + status, fall back to evaluating and mapping.
+    // Since the match row's team_a_pairing_id matches the team order, we need team mapping per match.
+    // Load once lazily — here we trust that match.team_a corresponds to teams[0] via pairing ordering,
+    // but that's only guaranteed if maybeRevealSession enforced it. It does. Safe to assume.
+
+    const pointsPerMatch = pointsBySession.get(m.session_id) ?? 1;
+
+    const concededToA = m.status === "conceded" && m.winning_team_id === teamAId;
+    const concededToB = m.status === "conceded" && m.winning_team_id !== teamAId && m.winning_team_id !== null;
+
+    const evaluation = evaluateMatch(
+      holes,
+      scoreRows,
+      pointsPerMatch,
+      endMatchEarly,
+      concededToA ? "team_a" : concededToB ? "team_b" : null
+    );
+
+    const started = scoreRows.length > 0 || evaluation.complete || m.status !== "pending";
+    if (started) matchesStarted = true;
+
+    if (evaluation.complete) {
+      pointsA += evaluation.points.team_a;
+      pointsB += evaluation.points.team_b;
+    } else if (started) {
+      switch (evaluation.status.state) {
+        case "team_a_up":
+          pointsA += pointsPerMatch;
+          break;
+        case "team_b_up":
+          pointsB += pointsPerMatch;
+          break;
+        case "all_square":
+          pointsA += pointsPerMatch / 2;
+          pointsB += pointsPerMatch / 2;
+          break;
+      }
+    }
   }
 
-  return {
-    pointsA,
-    pointsB,
-    matchesStarted: relevant.length > 0,
-  };
+  return { pointsA, pointsB, matchesStarted };
 }
 
 export default async function Home() {
@@ -83,7 +188,7 @@ export default async function Home() {
   const { tournament, teams, sessions } = data;
   const [teamA, teamB] = teams;
 
-  const totals = await getTournamentTotals(tournament.id, teamA.id, teamB.id);
+  const totals = await getTournamentTotals(tournament.id);
 
   const countdownTarget =
     sessions[0]?.start_at ?? tournament.start_date ?? FALLBACK_START;
@@ -120,7 +225,6 @@ export default async function Home() {
           </p>
         </div>
 
-        {/* Show big live score if matches have started, otherwise show countdown */}
         {totals.matchesStarted ? (
           <div className="mt-12 md:mt-16 max-w-4xl mx-auto">
             <div className="bg-ink-950/80 backdrop-blur border border-ink-800 rounded-sm overflow-hidden">
@@ -179,7 +283,7 @@ export default async function Home() {
                 </div>
               </div>
               <div className="bg-ink-900 border-t border-ink-800 px-6 py-2 text-center text-xs text-ink-500 font-mono tabular">
-                {formatPoints(totals.pointsA + totals.pointsB)} of {totalPoints} points awarded · {formatPoints(tournament.points_to_win)} to win
+                {formatPoints(totals.pointsA + totals.pointsB)} of {totalPoints} points live · {formatPoints(tournament.points_to_win)} to win
               </div>
             </div>
           </div>
