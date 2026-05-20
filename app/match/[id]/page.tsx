@@ -5,6 +5,7 @@ import { GearButton } from "@/components/GearButton";
 import { HoleGrid } from "@/components/match/HoleGrid";
 import { MatchHeader } from "@/components/match/MatchHeader";
 import { HoleSummary } from "@/components/match/HoleSummary";
+import { StrokeAllocation } from "@/components/match/StrokeAllocation";
 import { getSession } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ export default async function MatchPage({
     authSession?.role === "admin";
 
   const {
+    tournament,
     session: sess,
     match,
     teamA,
@@ -42,6 +44,7 @@ export default async function MatchPage({
     evaluation,
     statusText,
     allowance,
+    perHoleStrokes,
   } = data;
 
   const playedHoleNumbers = new Set(holeScores.map((r) => r.hole_number));
@@ -83,6 +86,18 @@ export default async function MatchPage({
         />
       </section>
 
+      {/* SHOTS — clear summary, above the grid */}
+      <section className="px-6 md:px-10 pb-6 max-w-3xl mx-auto">
+        <StrokeAllocation
+          format={sess.format}
+          teamA={teamA}
+          teamB={teamB}
+          holes={holes}
+          perHoleStrokes={perHoleStrokes}
+          maxStrokesPerHole={tournament.max_strokes_per_hole}
+        />
+      </section>
+
       <section className="px-6 md:px-10 pb-8 max-w-3xl mx-auto">
         <div className="flex items-baseline justify-between mb-4">
           <div className="text-eyebrow uppercase text-schloss-bright">
@@ -100,17 +115,27 @@ export default async function MatchPage({
 
         <HoleGrid
           matchId={match.id}
+          format={sess.format}
           holes={holes}
           outcomes={evaluation.outcomes}
           playedHoleNumbers={playedHoleNumbers}
           teamA={{
             display_code: teamA.team_display_code,
             colour: teamA.team_colour,
+            players: teamA.players.map((p) => ({
+              id: p.id,
+              display_name: p.display_name,
+            })),
           }}
           teamB={{
             display_code: teamB.team_display_code,
             colour: teamB.team_colour,
+            players: teamB.players.map((p) => ({
+              id: p.id,
+              display_name: p.display_name,
+            })),
           }}
+          perHoleStrokes={perHoleStrokes}
           currentHole={currentHole}
           canEdit={canEdit}
         />
