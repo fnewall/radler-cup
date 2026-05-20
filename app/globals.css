@@ -3,13 +3,13 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 html,
 body {
-  background: #FAFAF7;
-  color: #0F1512; /* ink-900 */
+  background: #0A0E0C;
+  color: #E4E9E6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "ss01", "cv11";
@@ -21,21 +21,15 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Soft schloss-green glow on the body — light variant */
+/* Subtle radial green glow behind the landing hero */
 .bg-radial-schloss {
   background:
-    radial-gradient(ellipse 90% 55% at 50% 0%, rgba(47, 143, 78, 0.08), transparent 70%),
-    radial-gradient(ellipse 60% 35% at 50% 100%, rgba(47, 143, 78, 0.04), transparent 70%),
-    #FAFAF7;
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(47, 143, 78, 0.15), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(47, 143, 78, 0.08), transparent 70%),
+    #0A0E0C;
 }
 
-/* Schloss-green band — used for the sticky mobile top bar */
-.bg-schloss-band {
-  background: linear-gradient(180deg, #1E5631 0%, #164426 100%);
-  color: #ffffff;
-}
-
-/* CSS-only fine grain — almost imperceptible on light surfaces */
+/* Fine noise texture for richness — CSS-only, no image */
 .texture-noise {
   position: relative;
 }
@@ -44,9 +38,9 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.025;
+  opacity: 0.015;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  mix-blend-mode: multiply;
+  mix-blend-mode: overlay;
 }
 
 /* Tabular figures for all score numerals */
@@ -55,32 +49,19 @@ body {
   font-feature-settings: "tnum", "ss01";
 }
 
-/* Hairlines — light variant */
+/* Hairline divider with gradient edge fall-off */
 .hairline {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(15, 21, 18, 0.10), transparent);
+  background: linear-gradient(90deg, transparent, rgba(228, 233, 230, 0.12), transparent);
 }
+
+/* Vertical hairline */
 .hairline-v {
   width: 1px;
-  background: linear-gradient(180deg, transparent, rgba(15, 21, 18, 0.10), transparent);
+  background: linear-gradient(180deg, transparent, rgba(228, 233, 230, 0.12), transparent);
 }
 
-/* Card surfaces */
-.card-light {
-  background: #FFFFFF;
-  border: 1px solid rgba(15, 21, 18, 0.08);
-  border-radius: 14px;
-}
-.card-light-glow {
-  background: #FFFFFF;
-  border: 1px solid rgba(15, 21, 18, 0.08);
-  border-radius: 14px;
-  box-shadow:
-    0 1px 0 rgba(15, 21, 18, 0.02),
-    0 8px 24px rgba(15, 21, 18, 0.05);
-}
-
-/* Hide scrollbar utility (for horizontal scrollers) */
+/* Hide scrollbar utility */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
