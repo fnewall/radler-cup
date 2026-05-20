@@ -42,7 +42,9 @@ const FORMAT_LABELS: Record<string, string> = {
   singles: "Singles",
 };
 
-function slotSize(format: string): 1 | 2 {
+// Maximum players a slot can hold (1 for singles, 2 for pair formats).
+// A slot is allowed to have FEWER (solo in a pair format).
+function maxSlotSize(format: string): 1 | 2 {
   return format === "singles" ? 1 : 2;
 }
 
@@ -78,11 +80,17 @@ export function PairingsDrafter({
   teamColour,
 }: Props) {
   const router = useRouter();
-  const size = slotSize(format);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const maxSize = maxSlotSize(format);
+  const isPairFormat = maxSize === 2;
+
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [error, setError] = useState<string | null>(null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
-  const [slots, setSlots] = useState<Slot[]>(() => buildInitialSlots(matchCount, existing));
+  const [slots, setSlots] = useState<Slot[]>(() =>
+    buildInitialSlots(matchCount, existing)
+  );
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 
   const usedPlayerIds = useMemo(() => {
@@ -100,6 +108,13 @@ export function PairingsDrafter({
 
   const readOnly = alreadySubmitted || pairingsRevealed;
 
+  // Count filled slots and solo slots (helpful summary)
+  const filledSlots = slots.filter((s) => s.player_ids.length > 0);
+  const filledCount = filledSlots.length;
+  const soloCount = isPairFormat
+    ? filledSlots.filter((s) => s.player_ids.length === 1).length
+    : 0;
+
   function clickPlayer(playerId: string) {
     if (readOnly) return;
     setSelectedPlayer((prev) => (prev === playerId ? null : playerId));
@@ -110,7 +125,7 @@ export function PairingsDrafter({
     setSlots((prev) =>
       prev.map((s) => {
         if (s.match_order !== matchOrder) return s;
-        if (s.player_ids.length >= size) return s;
+        if (s.player_ids.length >= maxSize) return s;
         if (s.player_ids.includes(selectedPlayer)) return s;
         return { ...s, player_ids: [...s.player_ids, selectedPlayer] };
       })
@@ -138,9 +153,8 @@ export function PairingsDrafter({
     setError(null);
 
     if (submit) {
-      const incomplete = slots.some((s) => s.player_ids.length !== size);
-      if (incomplete) {
-        setError(`Fill all ${matchCount} slots before submitting.`);
+      if (filledCount < 1) {
+        setError("Add at least one pairing before submitting.");
         setSaveState("error");
         setConfirmSubmit(false);
         return;
@@ -191,13 +205,26 @@ export function PairingsDrafter({
         </div>
       )}
 
+      {!readOnly && isPairFormat && (
+        <div className="bg-ink-950 border border-ink-800 rounded-sm p-4 text-sm text-ink-300 leading-relaxed">
+          <div className="text-eyebrow uppercase text-shot-accent mb-1.5">
+            Dropouts &amp; solos
+          </div>
+          You can submit fewer than {matchCount} pairings if players have
+          dropped out, and you can leave a slot with one player (a solo).
+          The final match count will be the smaller of what each captain
+          submits.
+        </div>
+      )}
+
       <section>
         <div className="flex items-baseline justify-between mb-4">
           <div className="text-eyebrow uppercase text-schloss-bright">
             Your roster · tap to select, then tap a slot
           </div>
           <div className="text-xs text-ink-500 font-mono tabular">
-            {availableRoster.length - usedPlayerIds.size} / {availableRoster.length} unassigned
+            {availableRoster.length - usedPlayerIds.size} /{" "}
+            {availableRoster.length} unassigned
           </div>
         </div>
 
@@ -240,7 +267,8 @@ export function PairingsDrafter({
             Match order · {FORMAT_LABELS[format] ?? format}
           </div>
           <div className="text-xs text-ink-500">
-            Match 1 plays opposing team&apos;s match 1, and so on.
+            {filledCount} of up to {matchCount} filled
+            {soloCount > 0 && ` · ${soloCount} solo`}
           </div>
         </div>
 
@@ -249,7 +277,8 @@ export function PairingsDrafter({
             <SlotRow
               key={slot.match_order}
               slot={slot}
-              size={size}
+              maxSize={maxSize}
+              isPairFormat={isPairFormat}
               playerById={playerById}
               onAddHere={() => clickSlotAddHere(slot.match_order)}
               onRemove={(pid) => removeFromSlot(slot.match_order, pid)}
@@ -264,9 +293,7 @@ export function PairingsDrafter({
       {!readOnly && (
         <div className="sticky bottom-0 pt-6 pb-4 bg-gradient-to-t from-ink-950 via-ink-950 to-transparent -mx-6 md:-mx-10 px-6 md:px-10">
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-end">
-            {error && (
-              <div className="text-sm text-tbc mr-auto">{error}</div>
-            )}
+            {error && <div className="text-sm text-tbc mr-auto">{error}</div>}
             {saveState === "saved" && (
               <div className="text-sm text-schloss-bright mr-auto">Saved ✓</div>
             )}
@@ -279,10 +306,10 @@ export function PairingsDrafter({
             </button>
             <button
               onClick={() => setConfirmSubmit(true)}
-              disabled={saveState === "saving"}
+              disabled={saveState === "saving" || filledCount < 1}
               className="h-11 px-5 rounded-md bg-schloss text-white hover:bg-schloss-bright transition-colors text-sm font-medium disabled:opacity-50"
             >
-              Submit (locks)
+              Submit {filledCount} {filledCount === 1 ? "pair" : "pairs"} (locks)
             </button>
           </div>
         </div>
@@ -304,12 +331,26 @@ export function PairingsDrafter({
                 Confirm
               </div>
               <h2 className="font-display text-2xl text-ink-100 mb-4">
-                Submit pairings?
+                Submit {filledCount} {filledCount === 1 ? "pairing" : "pairings"}?
               </h2>
-              <p className="text-sm text-ink-300 mb-6 leading-relaxed">
-                Once submitted, your pairings lock. They reveal to everyone when the other captain also submits. You cannot edit afterwards without contacting the admin.
+              <p className="text-sm text-ink-300 mb-3 leading-relaxed">
+                Once submitted, your pairings lock. They reveal to everyone
+                when the other captain also submits. You cannot edit afterwards
+                without contacting the admin.
               </p>
-              <div className="flex gap-3">
+              {filledCount < matchCount && (
+                <p className="text-sm text-shot-accent mb-3 leading-relaxed">
+                  You&apos;re submitting {filledCount} of a possible {matchCount}.
+                  Final match count will be min(your {filledCount}, other captain&apos;s).
+                </p>
+              )}
+              {soloCount > 0 && (
+                <p className="text-sm text-shot-accent mb-3 leading-relaxed">
+                  {soloCount} solo {soloCount === 1 ? "player" : "players"} —
+                  worth a full point each if both teams field a player.
+                </p>
+              )}
+              <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setConfirmSubmit(false)}
                   className="flex-1 h-11 rounded-md border border-ink-700 text-ink-200 hover:border-ink-500 transition-colors text-sm"
@@ -333,7 +374,8 @@ export function PairingsDrafter({
 
 function SlotRow({
   slot,
-  size,
+  maxSize,
+  isPairFormat,
   playerById,
   onAddHere,
   onRemove,
@@ -342,7 +384,8 @@ function SlotRow({
   teamColour,
 }: {
   slot: Slot;
-  size: 1 | 2;
+  maxSize: 1 | 2;
+  isPairFormat: boolean;
   playerById: (id: string) => RosterPlayer | undefined;
   onAddHere: () => void;
   onRemove: (pid: string) => void;
@@ -350,11 +393,16 @@ function SlotRow({
   readOnly: boolean;
   teamColour: string;
 }) {
-  const full = slot.player_ids.length >= size;
+  const full = slot.player_ids.length >= maxSize;
   const empty = slot.player_ids.length === 0;
+  const solo = isPairFormat && slot.player_ids.length === 1;
 
   return (
-    <div className="bg-ink-950 border border-ink-800 rounded-sm">
+    <div
+      className={`bg-ink-950 border rounded-sm ${
+        solo ? "border-shot-accent/40" : "border-ink-800"
+      }`}
+    >
       <div className="flex items-stretch">
         <div
           className="flex items-center justify-center px-5 py-4 min-w-[60px] border-r border-ink-800"
@@ -388,7 +436,7 @@ function SlotRow({
                     ×
                   </button>
                 )}
-                {idx < slot.player_ids.length - 1 && size > 1 && (
+                {idx < slot.player_ids.length - 1 && maxSize > 1 && (
                   <span className="text-ink-600 ml-1">&amp;</span>
                 )}
               </span>
@@ -397,6 +445,11 @@ function SlotRow({
 
           {empty && (
             <span className="text-xs text-ink-500 italic">Empty slot</span>
+          )}
+          {solo && (
+            <span className="text-[10px] uppercase tracking-[0.15em] text-shot-accent font-medium ml-1">
+              solo
+            </span>
           )}
         </div>
 
