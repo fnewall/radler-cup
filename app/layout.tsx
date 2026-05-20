@@ -32,7 +32,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#0A0E0C",
+  themeColor: "#1E5631", // schloss-deep — matches the sticky top bar
 };
 
 export default function RootLayout({
@@ -51,3 +51,4 @@ export default function RootLayout({
     </html>
   );
 }
+
