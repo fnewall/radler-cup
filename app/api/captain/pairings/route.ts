@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 type Slot = {
   match_order: number;
-  player_ids: string[]; // 1 for singles, 2 for pairs
+  player_ids: string[]; // 1 player = solo, 2 players = pair (pair formats only)
 };
 
 type Body = {
@@ -13,17 +13,16 @@ type Body = {
   submit: boolean; // true = lock and check for reveal; false = save as draft
 };
 
-function formatSlotSize(format: string): 1 | 2 {
-  return format === "singles" ? 1 : 2;
-}
-
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session || session.role !== "captain" || !session.scope) {
     if (session?.role === "admin") {
       // admins must specify scope via body below
     } else {
-      return NextResponse.json({ error: "Captain access required" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Captain access required" },
+        { status: 403 }
+      );
     }
   }
 
@@ -35,16 +34,20 @@ export async function POST(req: Request) {
   }
 
   if (!body.session_id || !Array.isArray(body.slots)) {
-    return NextResponse.json({ error: "session_id and slots required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "session_id and slots required" },
+      { status: 400 }
+    );
   }
 
   const supabase = createAdminClient();
 
-  // Identify the team this captain controls
-  // Admin path would need more scaffolding — for now only true captains hit this.
   const teamId = session?.scope;
   if (!teamId) {
-    return NextResponse.json({ error: "No team scope on session" }, { status: 403 });
+    return NextResponse.json(
+      { error: "No team scope on session" },
+      { status: 403 }
+    );
   }
 
   const { data: sessionRow } = await supabase
@@ -58,10 +61,12 @@ export async function POST(req: Request) {
   }
 
   if (sessionRow.pairings_revealed) {
-    return NextResponse.json({ error: "Pairings already revealed" }, { status: 409 });
+    return NextResponse.json(
+      { error: "Pairings already revealed" },
+      { status: 409 }
+    );
   }
 
-  // Ensure captain's team belongs to this tournament
   const { data: team } = await supabase
     .from("team")
     .select("id, tournament_id")
@@ -71,8 +76,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Team mismatch" }, { status: 403 });
   }
 
-  // Validate slots shape
-  const expectedSize = formatSlotSize(sessionRow.format);
+  const isSingles = sessionRow.format === "singles";
   const orders = new Set<number>();
   const allPlayerIds = new Set<string>();
 
@@ -95,15 +99,39 @@ export async function POST(req: Request) {
     }
     orders.add(slot.match_order);
 
-    if (!Array.isArray(slot.player_ids) || slot.player_ids.length !== expectedSize) {
+    // Slot size rules:
+    // - Singles: exactly 1 player
+    // - Pair formats: 1 (solo) or 2 (pair) players
+    if (!Array.isArray(slot.player_ids)) {
       return NextResponse.json(
-        { error: `Slot ${slot.match_order} expected ${expectedSize} player(s)` },
+        { error: `Slot ${slot.match_order}: player_ids must be an array` },
         { status: 400 }
       );
     }
+    if (isSingles) {
+      if (slot.player_ids.length !== 1) {
+        return NextResponse.json(
+          { error: `Singles: each match needs exactly 1 player` },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (slot.player_ids.length < 1 || slot.player_ids.length > 2) {
+        return NextResponse.json(
+          {
+            error: `Match ${slot.match_order}: pair formats accept 1 (solo) or 2 (pair) players`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     for (const pid of slot.player_ids) {
       if (typeof pid !== "string") {
-        return NextResponse.json({ error: "Invalid player_id" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Invalid player_id" },
+          { status: 400 }
+        );
       }
       if (allPlayerIds.has(pid)) {
         return NextResponse.json(
@@ -115,12 +143,24 @@ export async function POST(req: Request) {
     }
   }
 
-  // On submit: all match_count slots must be filled
-  if (body.submit && body.slots.length !== sessionRow.match_count) {
-    return NextResponse.json(
-      { error: `Must fill all ${sessionRow.match_count} slots to submit` },
-      { status: 400 }
-    );
+  // On submit: must have at least 1 pairing, and no more than match_count.
+  // (Captain may submit fewer than match_count if players have dropped out;
+  // the final match count will be min(teamA submitted, teamB submitted).)
+  if (body.submit) {
+    if (body.slots.length < 1) {
+      return NextResponse.json(
+        { error: "Submit at least 1 pairing" },
+        { status: 400 }
+      );
+    }
+    if (body.slots.length > sessionRow.match_count) {
+      return NextResponse.json(
+        {
+          error: `Cannot submit more than ${sessionRow.match_count} pairings`,
+        },
+        { status: 400 }
+      );
+    }
   }
 
   // Verify all players are on this team and available
@@ -197,7 +237,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Insert failed" }, { status: 500 });
   }
 
-  // Insert pairing_player rows
   const ppRows: { pairing_id: string; player_id: string; slot: number }[] = [];
   for (const slot of body.slots) {
     const p = inserted.find((x) => x.match_order === slot.match_order);
@@ -212,16 +251,21 @@ export async function POST(req: Request) {
   }
 
   if (ppRows.length > 0) {
-    const { error: ppErr } = await supabase.from("pairing_player").insert(ppRows);
+    const { error: ppErr } = await supabase
+      .from("pairing_player")
+      .insert(ppRows);
     if (ppErr) {
       console.error("Failed to insert pairing_players:", ppErr);
       return NextResponse.json({ error: "Insert failed" }, { status: 500 });
     }
   }
 
-  // On submit: check if other team has also submitted → reveal & create matches
   if (body.submit) {
-    await maybeRevealSession(body.session_id, teamId, sessionRow.tournament_id);
+    await maybeRevealSession(
+      body.session_id,
+      teamId,
+      sessionRow.tournament_id
+    );
   }
 
   return NextResponse.json({ ok: true, submitted: body.submit });
@@ -255,15 +299,12 @@ async function maybeRevealSession(
 
   if (!otherSubmitted) return;
 
-  // Both submitted → create match rows pairing up by match_order
   const { data: myPairings } = await supabase
     .from("pairing")
     .select("id, match_order")
     .eq("session_id", sessionId)
     .eq("team_id", myTeamId);
 
-  // Convention: team_a = first team alphabetically by display_order
-  // but simpler: team_a is the team with the lower display_order.
   const { data: teams } = await supabase
     .from("team")
     .select("id, display_order")
@@ -272,10 +313,42 @@ async function maybeRevealSession(
 
   if (!teams || teams.length < 2) return;
   const teamAId = teams[0].id;
-  const teamBId = teams[1].id;
 
   const aPairings = teamAId === myTeamId ? myPairings : otherPairings;
   const bPairings = teamAId === myTeamId ? otherPairings : myPairings;
+
+  // Match-creation joins on match_order. If one team submitted fewer match
+  // orders than the other, only the overlapping orders get matches —
+  // i.e. final match count = size of intersection.
+  // To make the result intuitive (no gaps), we re-key both lists to
+  // contiguous orders 1..N, where N = min(A submitted, B submitted).
+  const aSorted = [...(aPairings ?? [])].sort(
+    (x, y) => x.match_order - y.match_order
+  );
+  const bSorted = [...(bPairings ?? [])].sort(
+    (x, y) => x.match_order - y.match_order
+  );
+  const finalCount = Math.min(aSorted.length, bSorted.length);
+
+  // Update match_order on the pairings so the captain's selected ordering
+  // becomes 1..finalCount on each side (their relative order is preserved).
+  for (let i = 0; i < finalCount; i++) {
+    const newOrder = i + 1;
+    if (aSorted[i].match_order !== newOrder) {
+      await supabase
+        .from("pairing")
+        .update({ match_order: newOrder })
+        .eq("id", aSorted[i].id);
+      aSorted[i].match_order = newOrder;
+    }
+    if (bSorted[i].match_order !== newOrder) {
+      await supabase
+        .from("pairing")
+        .update({ match_order: newOrder })
+        .eq("id", bSorted[i].id);
+      bSorted[i].match_order = newOrder;
+    }
+  }
 
   const matchRows: {
     session_id: string;
@@ -285,24 +358,18 @@ async function maybeRevealSession(
     status: string;
   }[] = [];
 
-  for (const ap of aPairings ?? []) {
-    const bp = (bPairings ?? []).find((x) => x.match_order === ap.match_order);
-    if (!bp) continue;
+  for (let i = 0; i < finalCount; i++) {
     matchRows.push({
       session_id: sessionId,
-      match_order: ap.match_order,
-      team_a_pairing_id: ap.id,
-      team_b_pairing_id: bp.id,
+      match_order: i + 1,
+      team_a_pairing_id: aSorted[i].id,
+      team_b_pairing_id: bSorted[i].id,
       status: "pending",
     });
   }
 
   if (matchRows.length > 0) {
-    // Upsert by (session_id, match_order)
-    await supabase
-      .from("match")
-      .delete()
-      .eq("session_id", sessionId);
+    await supabase.from("match").delete().eq("session_id", sessionId);
     await supabase.from("match").insert(matchRows);
   }
 
