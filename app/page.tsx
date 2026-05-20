@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Countdown } from "@/components/Countdown";
 import { TeamCrest } from "@/components/TeamCrest";
-import { AppHeader } from "@/components/AppHeader";
+import { GearButton } from "@/components/GearButton";
 import { LiveTournamentRefresher } from "@/components/realtime/LiveTournamentRefresher";
 import { getLandingData } from "@/lib/queries/landing";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -143,9 +143,7 @@ async function getTournamentTotals(tournamentId: string): Promise<{
     );
 
     const started =
-      scoreRows.length > 0 ||
-      evaluation.complete ||
-      m.status !== "pending";
+      scoreRows.length > 0 || evaluation.complete || m.status !== "pending";
     if (started) matchesStarted = true;
 
     if (evaluation.complete) {
@@ -178,7 +176,7 @@ export default async function Home() {
       <main className="min-h-screen bg-radial-schloss flex items-center justify-center p-8">
         <div className="text-center space-y-3">
           <div className="text-eyebrow uppercase text-tbc">Error</div>
-          <p className="text-ink-500 text-sm">
+          <p className="text-ink-300 text-sm">
             Could not load tournament data. Check Supabase env vars.
           </p>
         </div>
@@ -206,102 +204,155 @@ export default async function Home() {
   const pctTarget = totalPoints > 0 ? (pointsToWin / totalPoints) * 100 : 50;
 
   return (
-    <main className="min-h-screen bg-radial-schloss texture-noise">
+    <main className="min-h-screen bg-radial-schloss texture-noise relative overflow-hidden">
       <LiveTournamentRefresher />
 
-      <AppHeader eyebrow={`${tournament.name} · MMXXVI`} />
+      {/* Sticky header — safer for mobile */}
+      <header className="sticky top-0 z-30 bg-ink-950/85 backdrop-blur border-b border-ink-800/60">
+        <div className="max-w-7xl mx-auto px-4 md:px-10 pt-safe pb-3 flex items-center justify-between min-h-[52px]">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-2 h-2 rounded-full bg-schloss-bright animate-pulse-live shrink-0" />
+            <span className="text-eyebrow uppercase text-ink-300 truncate">
+              {tournament.name} · MMXXVI
+            </span>
+          </div>
+          <GearButton />
+        </div>
+      </header>
 
       {/* HERO */}
-      <section className="px-4 md:px-8 pt-6 md:pt-12 pb-6 max-w-6xl mx-auto">
-        <div className="text-center mb-5 md:mb-10">
-          <div className="text-eyebrow uppercase text-schloss-deep mb-3">
+      <section className="relative z-10 px-4 md:px-10 pt-6 md:pt-20 pb-8 md:pb-12 max-w-7xl mx-auto">
+        <div className="text-center">
+          <div className="text-eyebrow uppercase text-schloss-bright mb-4 md:mb-6">
             Golf Club Schloss Ernegg · Austria
           </div>
-          <h1 className="font-display text-4xl md:text-hero text-ink-900 leading-[0.95]">
+          <h1 className="font-display text-4xl md:text-hero text-ink-100 leading-[0.95]">
             The {tournament.name}
           </h1>
-          <p className="mt-3 md:mt-5 text-sm md:text-lg text-ink-500 max-w-xl mx-auto">
+          <p className="mt-3 md:mt-6 text-sm md:text-lg text-ink-300 max-w-xl mx-auto leading-relaxed">
             {teamA.player_count + teamB.player_count} players · two teams ·
             three days of match play
           </p>
         </div>
 
         {totals.matchesStarted ? (
-          <div className="card-light-glow overflow-hidden">
-            <div className="px-4 py-2.5 flex items-center justify-between border-b border-ink-100">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-schloss-bright animate-pulse-live" />
-                <span className="text-eyebrow uppercase text-schloss-deep">
-                  Live
+          <div className="mt-8 md:mt-16 max-w-4xl mx-auto">
+            <div className="bg-ink-950/80 backdrop-blur border border-ink-800 rounded-sm overflow-hidden">
+              {/* Live ribbon */}
+              <div className="px-4 py-2 flex items-center justify-between border-b border-ink-800">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-schloss-bright animate-pulse-live" />
+                  <span className="text-eyebrow uppercase text-schloss-bright">
+                    Live
+                  </span>
+                </div>
+                <span className="text-[10px] uppercase tracking-[0.15em] text-ink-500 font-mono tabular">
+                  {formatPoints(playedPoints)} / {totalPoints} pts
                 </span>
               </div>
-              <span className="text-[10px] uppercase tracking-[0.15em] text-ink-400 font-mono tabular">
-                {formatPoints(playedPoints)} / {totalPoints} pts
-              </span>
-            </div>
 
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-5 md:py-7 gap-2">
-              <TeamScoreColumn team={teamA} points={totals.pointsA} align="right" />
-              <div className="font-display text-3xl md:text-5xl text-ink-300 italic px-2 select-none">
-                —
-              </div>
-              <TeamScoreColumn team={teamB} points={totals.pointsB} align="left" />
-            </div>
+              <div className="grid grid-cols-[1fr_auto_1fr] items-stretch">
+                <div
+                  className="py-6 md:py-12 px-4 md:px-8 flex items-center justify-end"
+                  style={{
+                    backgroundColor: hexTint(teamA.colour_primary ?? "#3B8BE8", 0.1),
+                  }}
+                >
+                  <div className="text-right">
+                    <div
+                      className="text-eyebrow uppercase mb-2"
+                      style={{ color: teamA.colour_primary }}
+                    >
+                      {teamA.name}
+                    </div>
+                    <div
+                      className="font-mono tabular text-5xl md:text-7xl font-light leading-none"
+                      style={{ color: teamA.colour_primary }}
+                    >
+                      {formatPoints(totals.pointsA)}
+                    </div>
+                  </div>
+                </div>
 
-            {/* Progress to win */}
-            <div className="px-4 pb-4">
-              <div className="relative h-1.5 bg-ink-100 rounded-full overflow-hidden">
+                <div className="flex items-center justify-center px-3 md:px-6 bg-ink-900 border-x border-ink-800">
+                  <div className="font-display text-2xl md:text-4xl text-ink-500 italic">
+                    —
+                  </div>
+                </div>
+
                 <div
-                  className="absolute left-0 top-0 bottom-0"
+                  className="py-6 md:py-12 px-4 md:px-8 flex items-center justify-start"
                   style={{
-                    width: `${pctA}%`,
-                    backgroundColor: teamA.colour_primary ?? "#3B8BE8",
+                    backgroundColor: hexTint(teamB.colour_primary ?? "#E24B4A", 0.1),
                   }}
-                />
-                <div
-                  className="absolute right-0 top-0 bottom-0"
-                  style={{
-                    width: `${pctB}%`,
-                    backgroundColor: teamB.colour_primary ?? "#E24B4A",
-                  }}
-                />
-                <div
-                  className="absolute -top-1 -bottom-1 w-[2px] bg-schloss-deep rounded-sm"
-                  style={{ left: `${pctTarget}%` }}
-                  aria-label={`${pointsToWin} to win`}
-                />
+                >
+                  <div className="text-left">
+                    <div
+                      className="text-eyebrow uppercase mb-2"
+                      style={{ color: teamB.colour_primary }}
+                    >
+                      {teamB.name}
+                    </div>
+                    <div
+                      className="font-mono tabular text-5xl md:text-7xl font-light leading-none"
+                      style={{ color: teamB.colour_primary }}
+                    >
+                      {formatPoints(totals.pointsB)}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="mt-2 flex items-center justify-between text-[11px] text-ink-500">
-                <span>
-                  {formatPoints(playedPoints)} of {totalPoints} played
-                </span>
-                <span>
-                  <strong className="text-ink-900 font-medium">
-                    {formatPoints(pointsToWin)}
-                  </strong>{" "}
-                  to win
-                </span>
+
+              {/* Progress to win */}
+              <div className="bg-ink-900 border-t border-ink-800 px-4 py-3">
+                <div className="relative h-1.5 bg-ink-800 rounded-full overflow-hidden">
+                  <div
+                    className="absolute left-0 top-0 bottom-0"
+                    style={{
+                      width: `${pctA}%`,
+                      backgroundColor: teamA.colour_primary ?? "#3B8BE8",
+                    }}
+                  />
+                  <div
+                    className="absolute right-0 top-0 bottom-0"
+                    style={{
+                      width: `${pctB}%`,
+                      backgroundColor: teamB.colour_primary ?? "#E24B4A",
+                    }}
+                  />
+                  <div
+                    className="absolute -top-1 -bottom-1 w-[2px] bg-schloss-bright rounded-sm"
+                    style={{ left: `${pctTarget}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[10px] uppercase tracking-[0.15em] text-ink-500 font-mono tabular">
+                  <span>{formatPoints(playedPoints)} played</span>
+                  <span className="text-schloss-bright">
+                    {formatPoints(pointsToWin)} to win
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         ) : (
-          <div className="flex justify-center">
+          <div className="mt-10 md:mt-24 flex justify-center">
             <Countdown target={countdownTarget} />
           </div>
         )}
       </section>
 
-      {/* TEAM v TEAM — desktop only */}
-      <section className="hidden md:block px-8 py-16 max-w-6xl mx-auto">
-        <div className="hairline mb-12" />
-        <div className="text-center mb-12">
-          <div className="text-eyebrow uppercase text-ink-400 mb-3">The Tie</div>
-          <h2 className="font-display text-display text-ink-900">
+      {/* TEAM v TEAM — desktop only (it dominates mobile) */}
+      <div className="relative z-10 hairline max-w-5xl mx-auto hidden md:block" />
+
+      <section className="relative z-10 px-6 md:px-10 py-20 max-w-7xl mx-auto hidden md:block">
+        <div className="text-center mb-16">
+          <div className="text-eyebrow uppercase text-ink-500 mb-3">The Tie</div>
+          <h2 className="font-display text-display text-ink-100">
             Team versus Team
           </h2>
         </div>
 
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-16 items-center">
+        <div className="grid grid-cols-[1fr_auto_1fr] gap-6 md:gap-16 items-center">
           <TeamCrest
             team="sandbaggers"
             name={teamA.name}
@@ -312,11 +363,11 @@ export default async function Home() {
           />
 
           <div className="flex flex-col items-center gap-3">
-            <div className="font-display text-5xl font-light text-ink-400 italic">
+            <div className="font-display text-3xl md:text-5xl font-light text-ink-500 italic">
               vs
             </div>
             <div className="hairline-v h-16" />
-            <div className="text-eyebrow uppercase text-ink-400">
+            <div className="text-eyebrow uppercase text-ink-500">
               {totalPoints} pts
             </div>
           </div>
@@ -332,45 +383,44 @@ export default async function Home() {
         </div>
       </section>
 
+      <div className="relative z-10 hairline max-w-5xl mx-auto" />
+
       {/* SESSIONS */}
-      <section className="px-4 md:px-8 pb-20 md:pb-16 max-w-6xl mx-auto">
-        <div className="md:hidden hairline my-2" />
-        <div className="md:text-center mb-4 md:mb-12 mt-4 md:mt-0 px-1">
-          <div className="text-eyebrow uppercase text-ink-400 mb-1 md:mb-3">
+      <section className="relative z-10 px-4 md:px-10 py-10 md:py-20 max-w-6xl mx-auto">
+        <div className="md:text-center mb-6 md:mb-12">
+          <div className="text-eyebrow uppercase text-ink-500 mb-2 md:mb-3">
             The Format
           </div>
-          <h2 className="font-display text-2xl md:text-display text-ink-900">
+          <h2 className="font-display text-2xl md:text-display text-ink-100">
             {sessions.length} sessions · {totalPoints} points
           </h2>
         </div>
 
-        {/* Mobile: stacked session pills */}
+        {/* Mobile: stacked pills */}
         <div className="md:hidden flex flex-col gap-2">
           {sessions.map((s) => (
             <Link
               key={s.id}
               href={`/session/${s.id}`}
-              className="card-light flex items-center gap-3 px-3 py-3 active:bg-ink-100/60 transition-colors"
+              className="bg-ink-900/70 border border-ink-800 rounded-lg flex items-center gap-3 px-3 py-3 active:bg-ink-900 transition-colors"
             >
-              <div className="w-9 h-9 rounded-lg bg-schloss-deep text-white font-display text-base flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-lg bg-schloss-deep/40 border border-schloss/30 text-schloss-bright font-display text-lg flex items-center justify-center shrink-0">
                 {s.session_number}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 text-[11px] text-ink-500">
-                  <span>
-                    {DAY_LABELS[s.day_number] ?? `Day ${s.day_number}`}
-                  </span>
-                  <span>·</span>
+                <div className="flex items-center gap-1.5 text-[11px] text-ink-400">
+                  <span>{DAY_LABELS[s.day_number] ?? `Day ${s.day_number}`}</span>
+                  <span className="text-ink-600">·</span>
                   <span>{sessionTimeLabel(s)}</span>
                 </div>
-                <div className="font-display text-base text-ink-900 leading-snug truncate">
+                <div className="font-display text-base text-ink-100 leading-snug truncate">
                   {FORMAT_LABELS[s.format] ?? s.format}
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="font-mono tabular text-base text-ink-900">
+                <div className="font-mono tabular text-base text-ink-100">
                   {s.match_count * s.points_per_match}
-                  <span className="text-[10px] uppercase tracking-wider text-ink-400 ml-1">
+                  <span className="text-[10px] uppercase tracking-wider text-ink-500 ml-1">
                     pts
                   </span>
                 </div>
@@ -382,35 +432,38 @@ export default async function Home() {
           ))}
         </div>
 
-        {/* Desktop: editorial 5-col grid */}
-        <div className="hidden md:grid grid-cols-5 gap-px bg-ink-100 border border-ink-100 rounded-sm overflow-hidden">
+        {/* Desktop: editorial grid */}
+        <div className="hidden md:grid grid-cols-5 gap-px bg-ink-800 border border-ink-800 rounded-sm overflow-hidden">
           {sessions.map((s) => (
             <Link
               key={s.id}
               href={`/session/${s.id}`}
-              className="bg-white p-6 hover:bg-ink-100/40 transition-colors block group"
+              className="bg-ink-950 p-6 hover:bg-ink-900 transition-colors block group"
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="text-eyebrow uppercase text-schloss-deep">
+                <div className="text-eyebrow uppercase text-schloss-bright">
                   Session {s.session_number}
                 </div>
                 <SessionStatusDot session={s} />
               </div>
-              <div className="text-ink-500 text-sm">
+
+              <div className="text-ink-400 text-sm">
                 {DAY_LABELS[s.day_number] ?? `Day ${s.day_number}`}
               </div>
-              <div className="text-ink-600 text-sm mb-5">
+              <div className="text-ink-300 text-sm mb-5">
                 {sessionTimeLabel(s)}
               </div>
-              <div className="font-display text-2xl text-ink-900 leading-tight">
+
+              <div className="font-display text-2xl text-ink-100 leading-tight">
                 {FORMAT_LABELS[s.format] ?? s.format}
               </div>
+
               <div className="mt-4 flex items-baseline justify-between">
                 <div className="flex items-baseline gap-2">
-                  <span className="font-mono tabular text-2xl text-ink-900">
+                  <span className="font-mono tabular text-2xl text-ink-100">
                     {s.match_count * s.points_per_match}
                   </span>
-                  <span className="text-eyebrow uppercase text-ink-400">
+                  <span className="text-eyebrow uppercase text-ink-500">
                     pts
                   </span>
                 </div>
@@ -420,40 +473,40 @@ export default async function Home() {
           ))}
         </div>
 
-        {/* Tournament stats strip */}
+        {/* Stats strip */}
         <div className="mt-8 md:mt-12 grid grid-cols-3 md:flex md:justify-center md:gap-16 items-center text-center">
-          <div className="px-1">
-            <div className="font-mono tabular text-2xl md:text-4xl font-light text-ink-900">
+          <div>
+            <div className="font-mono tabular text-2xl md:text-4xl font-light text-ink-100">
               {tournament.points_to_win}
             </div>
-            <div className="text-eyebrow uppercase text-ink-400 mt-1 md:mt-2">
+            <div className="text-eyebrow uppercase text-ink-500 mt-1 md:mt-2">
               To Win
             </div>
           </div>
           <div className="hidden md:block hairline-v h-12" />
-          <div className="px-1 border-l border-r border-ink-100/70 md:border-0">
-            <div className="font-mono tabular text-2xl md:text-4xl font-light text-ink-900">
+          <div className="border-l border-r border-ink-800/60 md:border-0">
+            <div className="font-mono tabular text-2xl md:text-4xl font-light text-ink-100">
               {tournament.points_to_tie}–{tournament.points_to_tie}
             </div>
-            <div className="text-eyebrow uppercase text-ink-400 mt-1 md:mt-2">
+            <div className="text-eyebrow uppercase text-ink-500 mt-1 md:mt-2">
               Tie
             </div>
           </div>
           <div className="hidden md:block hairline-v h-12" />
-          <div className="px-1">
-            <div className="font-mono tabular text-2xl md:text-4xl font-light text-ink-900">
+          <div>
+            <div className="font-mono tabular text-2xl md:text-4xl font-light text-ink-100">
               72
             </div>
-            <div className="text-eyebrow uppercase text-ink-400 mt-1 md:mt-2">
+            <div className="text-eyebrow uppercase text-ink-500 mt-1 md:mt-2">
               Par
             </div>
           </div>
         </div>
       </section>
 
-      <footer className="px-4 md:px-8 py-6 max-w-6xl mx-auto pb-safe">
-        <div className="hairline mb-5" />
-        <div className="flex flex-col md:flex-row justify-between items-center gap-2 md:gap-4 text-[10px] text-ink-400">
+      <footer className="relative z-10 px-4 md:px-10 py-8 max-w-7xl mx-auto pb-safe">
+        <div className="hairline mb-6" />
+        <div className="flex flex-col md:flex-row justify-between items-center gap-2 md:gap-4 text-[10px] text-ink-500">
           <div className="text-eyebrow uppercase">
             Niederösterreich · Austria
           </div>
@@ -466,36 +519,18 @@ export default async function Home() {
   );
 }
 
-function TeamScoreColumn({
-  team,
-  points,
-  align,
-}: {
-  team: { name: string; colour_primary: string | null };
-  points: number;
-  align: "left" | "right";
-}) {
-  return (
-    <div className={align === "right" ? "text-right" : "text-left"}>
-      <div
-        className="text-eyebrow uppercase mb-1.5"
-        style={{ color: team.colour_primary ?? "#1E5631" }}
-      >
-        {team.name}
-      </div>
-      <div
-        className="font-mono tabular text-5xl md:text-7xl font-light leading-none"
-        style={{ color: team.colour_primary ?? "#1E5631" }}
-      >
-        {formatPoints(points)}
-      </div>
-    </div>
-  );
-}
-
 function formatPoints(n: number): string {
   if (n === Math.floor(n)) return `${n}`;
   return n.toFixed(1);
+}
+
+function hexTint(hex: string, alpha: number): string {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return hex;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function SessionStatusDot({
@@ -507,23 +542,21 @@ function SessionStatusDot({
     return (
       <div className="flex items-center gap-1.5">
         <div className="w-1.5 h-1.5 rounded-full bg-schloss-bright animate-pulse-live" />
-        <span className="text-eyebrow uppercase text-schloss-deep">Live</span>
+        <span className="text-eyebrow uppercase text-schloss-bright">Live</span>
       </div>
     );
   }
   if (session.status === "complete") {
-    return (
-      <span className="text-eyebrow uppercase text-ink-400">Final</span>
-    );
+    return <span className="text-eyebrow uppercase text-ink-500">Final</span>;
   }
   if (session.pairings_revealed) {
     return (
-      <span className="text-eyebrow uppercase text-schloss-deep">
+      <span className="text-eyebrow uppercase text-schloss-bright">
         Revealed
       </span>
     );
   }
-  return <span className="text-eyebrow uppercase text-ink-400">Upcoming</span>;
+  return <span className="text-eyebrow uppercase text-ink-600">Upcoming</span>;
 }
 
 function SessionLinkLabel({
@@ -540,7 +573,7 @@ function SessionLinkLabel({
           ? "View matches →"
           : "View →";
   return (
-    <span className="text-eyebrow uppercase text-schloss-deep opacity-0 group-hover:opacity-100 transition-opacity">
+    <span className="text-eyebrow uppercase text-schloss-bright opacity-0 group-hover:opacity-100 transition-opacity">
       {label}
     </span>
   );
