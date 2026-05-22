@@ -31,6 +31,25 @@ type Props = {
 
 type Pip = { label: string; count: number };
 
+// Formats where both partners share strokes (one ball, alternate or one-of-best
+// shot). For these, the pair shows as a single pip with the team display code.
+const SHARED_PAIR_FORMATS = new Set([
+  "foursomes",
+  "greensomes",
+  "scramble_2v2",
+]);
+
+// Formats where each individual player has their own strokes. We always show
+// one pip per player so it's obvious who's getting the shot.
+const INDIVIDUAL_FORMATS = new Set(["betterball", "singles"]);
+
+// Take a first initial (or first two if names collide later — left as a TODO).
+function initialOf(name: string): string {
+  const cleaned = (name || "?").trim();
+  if (!cleaned) return "?";
+  return cleaned[0].toUpperCase();
+}
+
 export function HoleGrid({
   matchId,
   format,
@@ -43,10 +62,8 @@ export function HoleGrid({
   currentHole,
   canEdit,
 }: Props) {
-  const isPair =
-    format === "foursomes" ||
-    format === "greensomes" ||
-    format === "scramble_2v2";
+  const sharedPair = SHARED_PAIR_FORMATS.has(format);
+  const individual = INDIVIDUAL_FORMATS.has(format);
 
   // Running match state at each played hole
   const runningState: Record<number, { delta: number }> = {};
@@ -62,32 +79,40 @@ export function HoleGrid({
     runningState[i] = { delta };
   }
 
-  // Pips for one team on one hole.
-  // Pair formats collapse to a single pip with the team code.
-  // Individual formats (betterball, singles) show one pip per player with that player's initial.
   function pipsForTeam(
     team: { display_code: string; players: PlayerLite[] },
     hole: number
   ): Pip[] {
-    const playerPips: Pip[] = team.players
-      .map((p) => ({
-        label: (p.display_name || "?")[0].toUpperCase(),
-        count: perHoleStrokes[p.id]?.[hole] ?? 0,
-      }))
-      .filter((pp) => pp.count > 0);
+    // Build raw per-player counts for this hole
+    const perPlayer = team.players.map((p) => ({
+      player: p,
+      count: perHoleStrokes[p.id]?.[hole] ?? 0,
+    }));
 
-    if (playerPips.length === 0) return [];
-
-    if (isPair && playerPips.length === team.players.length) {
-      // Collapse pair if everyone shares the same count
-      const counts = playerPips.map((p) => p.count);
-      const same = counts.every((c) => c === counts[0]);
-      if (same) {
-        return [{ label: team.display_code, count: counts[0] }];
-      }
+    if (sharedPair) {
+      // Foursomes / greensomes / scramble — collapse to ONE pip showing the
+      // team display code. We take the max stroke count across the pair
+      // (they share strokes in these formats, so the values should match).
+      const maxCount = perPlayer.reduce((m, x) => Math.max(m, x.count), 0);
+      if (maxCount <= 0) return [];
+      return [{ label: team.display_code, count: maxCount }];
     }
 
-    return playerPips;
+    if (individual) {
+      // Betterball / singles — show one pip PER player who receives shots,
+      // labelled with their first initial so it's obvious who.
+      return perPlayer
+        .filter((x) => x.count > 0)
+        .map((x) => ({
+          label: initialOf(x.player.display_name),
+          count: x.count,
+        }));
+    }
+
+    // Fallback (unknown format): collapse to team code
+    const maxCount = perPlayer.reduce((m, x) => Math.max(m, x.count), 0);
+    if (maxCount <= 0) return [];
+    return [{ label: team.display_code, count: maxCount }];
   }
 
   function renderCell(holeNumber: number) {
@@ -165,16 +190,15 @@ export function HoleGrid({
         )}
         {centreContent}
 
-        {/* Per-player shot pips — bottom of cell.
-            Left half = team A receivers, right half = team B receivers. */}
+        {/* Per-team shot pips. Left half = team A, right half = team B. */}
         {hasShots && (
           <div className="absolute bottom-0 left-0 right-0 flex pointer-events-none">
-            <div className="flex-1 flex items-center justify-start gap-px pl-0.5 pb-0.5">
+            <div className="flex-1 flex items-end justify-start gap-px pl-0.5 pb-0.5 flex-wrap">
               {pipsA.map((p, i) => (
                 <ShotPip key={`a-${i}`} pip={p} />
               ))}
             </div>
-            <div className="flex-1 flex items-center justify-end gap-px pr-0.5 pb-0.5">
+            <div className="flex-1 flex items-end justify-end gap-px pr-0.5 pb-0.5 flex-wrap">
               {pipsB.map((p, i) => (
                 <ShotPip key={`b-${i}`} pip={p} />
               ))}
